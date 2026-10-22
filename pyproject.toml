@@ -13,10 +13,15 @@ dependencies = [
     "scikit-learn",
     "pandas",
     "matplotlib",
+    "pylsl",
+    "pyglet>=2.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+analysis = ["jupyterlab", "seaborn", "mne"]
+# torch is not listed here: install the CPU wheel separately (see PLAN.md §3)
+nlp = ["transformers", "wordfreq"]
 
 [tool.setuptools]
 packages = ["ssvep"]
