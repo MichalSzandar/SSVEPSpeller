@@ -32,7 +32,9 @@ def test_bandpass_keeps_shape_and_passband():
     )
 
     assert X.shape == (1, 1, 1000)
-    assert np.allclose(X[:, :, 250:750], np.sin(2 * np.pi * 12 * time[250:750]), atol=0.01)
+    assert np.allclose(
+        X[:, :, 250:750], np.sin(2 * np.pi * 12 * time[250:750]), atol=0.01
+    )
 
 
 @pytest.mark.skip(reason="TODO")
