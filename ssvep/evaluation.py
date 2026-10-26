@@ -12,7 +12,23 @@ import pandas as pd
 
 def itr(n_targets: int, accuracy: float, trial_time: float) -> float:
     """Information transfer rate in bits/min; 0 for accuracy at or below chance (1/N)."""
-    raise NotImplementedError
+    if n_targets <= 0 or trial_time <= 0:
+        return 0.0
+
+    chance = 1.0 / n_targets
+    if accuracy <= chance:
+        return 0.0
+
+    p = float(accuracy)
+    if p >= 1.0:
+        return np.log2(n_targets) * 60.0 / trial_time
+
+    bits_per_selection = (
+        np.log2(n_targets)
+        + p * np.log2(p)
+        + (1.0 - p) * np.log2((1.0 - p) / (n_targets - 1))
+    )
+    return bits_per_selection * 60.0 / trial_time
 
 
 def leave_one_block_out(estimator, X: np.ndarray, y: np.ndarray, blocks: np.ndarray) -> float:

@@ -133,7 +133,7 @@ def make_synthetic(
                 )
                 noise_std = np.sqrt(np.mean(signal**2)) / (10 ** (snr_db / 20))
                 noise = rng.normal(0.0, noise_std, size=n_samples)
-                X[b, t, c] = signal + noise
+                X[b, t, c, :] = signal + noise
 
     X = X.reshape(n_blocks * n_targets, n_channels, n_samples)
     y = np.tile(np.arange(n_targets), n_blocks)
