@@ -49,8 +49,9 @@ def benchmark_channel_indices(channels: list[str]) -> np.ndarray:
 
     if len(result) != len(channels):
         raise ValueError(f"Some channels not found in Benchmark dataset: {channels}")
-    
+
     return np.array(result)
+
 
 def load_benchmark(
     subject: int,
@@ -64,7 +65,7 @@ def load_benchmark(
     Returns (X, y, blocks) as described at the top of this module.
     """
     mat = loadmat(config.BENCHMARK_DIR / f"S{subject}.mat")
-    data = mat["data"]    # (channels, samples, targets, blocks)
+    data = mat["data"]  # (channels, samples, targets, blocks)
 
     channel_indices = benchmark_channel_indices(channels)
     target_indices = benchmark_target_indices(freqs)

@@ -8,7 +8,9 @@ from ssvep.evaluation import itr
 
 def test_itr_perfect_accuracy():
     # P = 1 -> B = log2(N) bits per selection, one selection per second.
-    assert itr(n_targets=40, accuracy=1.0, trial_time=1.0) == pytest.approx(60 * np.log2(40))
+    assert itr(n_targets=40, accuracy=1.0, trial_time=1.0) == pytest.approx(
+        60 * np.log2(40)
+    )
 
 
 @pytest.mark.skip(reason="TODO")

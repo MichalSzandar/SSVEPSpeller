@@ -14,7 +14,9 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 
-def reference_signals(freq: float, fs: float, n_samples: int, n_harmonics: int = 5) -> np.ndarray:
+def reference_signals(
+    freq: float, fs: float, n_samples: int, n_harmonics: int = 5
+) -> np.ndarray:
     """Sine/cosine references for one stimulus frequency -> (2 * n_harmonics, n_samples).
 
     Rows: sin(2*pi*h*f*t) and cos(2*pi*h*f*t) for h = 1..n_harmonics, t = n / fs.

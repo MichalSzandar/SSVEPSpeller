@@ -15,17 +15,23 @@ All filters work along the last axis (time) and accept any number of leading axe
 import numpy as np
 
 
-def notch(X: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0) -> np.ndarray:
+def notch(
+    X: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0
+) -> np.ndarray:
     """Zero-phase notch filter removing mains interference at ``freq`` Hz."""
     raise NotImplementedError
 
 
-def bandpass(X: np.ndarray, fs: float, low: float, high: float, order: int = 4) -> np.ndarray:
+def bandpass(
+    X: np.ndarray, fs: float, low: float, high: float, order: int = 4
+) -> np.ndarray:
     """Zero-phase band-pass filter between ``low`` and ``high`` Hz."""
     raise NotImplementedError
 
 
-def filter_bank_weights(n_subbands: int, a: float = 1.25, b: float = 0.25) -> np.ndarray:
+def filter_bank_weights(
+    n_subbands: int, a: float = 1.25, b: float = 0.25
+) -> np.ndarray:
     """Weights w(m), m = 1..n_subbands, for combining sub-band scores (Chen 2015)."""
     raise NotImplementedError
 

@@ -51,11 +51,15 @@ def record(inlet: pylsl.StreamInlet, seconds: float) -> tuple[np.ndarray, np.nda
 def print_stream_info(stream: pylsl.StreamInfo):
     """Print the name, type, channel count, nominal sampling rate, and source ID."""
     print(f"Stream: {stream.name()} ({stream.type()})")
-    print(f"  channels: {stream.channel_count()}, srate: {stream.nominal_srate():.1f} Hz")
+    print(
+        f"  channels: {stream.channel_count()}, srate: {stream.nominal_srate():.1f} Hz"
+    )
     print(f"  source_id: {stream.source_id()}")
 
 
-def stddev_by_channel(labels: list[str], samples: np.ndarray) -> list[tuple[str, float]]:
+def stddev_by_channel(
+    labels: list[str], samples: np.ndarray
+) -> list[tuple[str, float]]:
     """Pair each channel label with its standard deviation."""
     if samples.size == 0:
         return []
@@ -75,7 +79,9 @@ def stddev_by_channel(labels: list[str], samples: np.ndarray) -> list[tuple[str,
     return [(label, float(value)) for label, value in zip(labels, stddev)]
 
 
-def select_stream(streams: list[pylsl.StreamInfo], stream_type: str | None) -> pylsl.StreamInfo | None:
+def select_stream(
+    streams: list[pylsl.StreamInfo], stream_type: str | None
+) -> pylsl.StreamInfo | None:
     """Pick a stream, preferring a data stream over marker streams when type is unspecified."""
     if stream_type is not None:
         matches = [s for s in streams if s.type() == stream_type]
@@ -85,12 +91,16 @@ def select_stream(streams: list[pylsl.StreamInfo], stream_type: str | None) -> p
     return data_streams[0] if data_streams else None
 
 
-def print_recorded_info(samples: np.ndarray, timestamps: np.ndarray, labels: list[str] | None = None):
+def print_recorded_info(
+    samples: np.ndarray, timestamps: np.ndarray, labels: list[str] | None = None
+):
     """Print the number of samples, effective sampling rate, and per-channel stddev."""
     print(f"Recorded {len(samples)} samples, {len(timestamps)} timestamps.")
 
     if len(samples) < 2 or len(timestamps) < 2:
-        print("Need at least 2 samples to compute effective sampling rate and stddev; this often means a marker stream was selected.")
+        print(
+            "Need at least 2 samples to compute effective sampling rate and stddev; this often means a marker stream was selected."
+        )
         return
 
     span = timestamps[-1] - timestamps[0]
@@ -106,11 +116,17 @@ def print_recorded_info(samples: np.ndarray, timestamps: np.ndarray, labels: lis
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--type", default=None, help="stream type to inspect, e.g. EEG")
     parser.add_argument("--seconds", type=float, default=5.0)
-    parser.add_argument("--wait", type=float, default=2.0, help="seconds to search for streams")
-    parser.add_argument("--alpha", action="store_true", help="eyes open/closed alpha test")
+    parser.add_argument(
+        "--wait", type=float, default=2.0, help="seconds to search for streams"
+    )
+    parser.add_argument(
+        "--alpha", action="store_true", help="eyes open/closed alpha test"
+    )
     args = parser.parse_args()
 
     streams = list_streams(args.wait)
@@ -119,7 +135,9 @@ def main():
         if args.type is not None:
             print(f"No streams found for type '{args.type}'.")
         else:
-            print("No data streams found. Pass --type EEG to inspect a specific stream.")
+            print(
+                "No data streams found. Pass --type EEG to inspect a specific stream."
+            )
         return
 
     for stream in streams:
@@ -129,21 +147,29 @@ def main():
 
     ch_labels = channel_labels(inlet)
     print(f"Channel labels: {ch_labels}")
-    print(f"\nRecording {args.seconds:.1f} seconds from stream {selected_stream.name()}...")
+    print(
+        f"\nRecording {args.seconds:.1f} seconds from stream {selected_stream.name()}..."
+    )
     samples, timestamps = record(inlet, args.seconds)
     print_recorded_info(samples, timestamps, ch_labels)
 
     if args.alpha:
-        print("\nAlpha test: open your eyes for 10 seconds, then close them for 10 seconds.")
+        print(
+            "\nAlpha test: open your eyes for 10 seconds, then close them for 10 seconds."
+        )
         input("Press Enter to start...")
         samples, timestamps = record(inlet, 10.0)
-        fs_open, pxx_open = welch(samples, inlet.info().nominal_srate(), nperseg=256, axis=0)
+        fs_open, pxx_open = welch(
+            samples, inlet.info().nominal_srate(), nperseg=256, axis=0
+        )
         pxx_open = np.mean(pxx_open, axis=1)
 
         print("Now close your eyes for 10 seconds.")
         input("Press Enter to continue...")
         samples, timestamps = record(inlet, 10.0)
-        fs_closed, pxx_closed = welch(samples, inlet.info().nominal_srate(), nperseg=256, axis=0)
+        fs_closed, pxx_closed = welch(
+            samples, inlet.info().nominal_srate(), nperseg=256, axis=0
+        )
         pxx_closed = np.mean(pxx_closed, axis=1)
 
         print("test finished, you can open your eyes again. \a")

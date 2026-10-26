@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pylint"]
+dev = ["pytest", "pylint", "black"]
 analysis = ["jupyterlab", "seaborn", "mne"]
 # torch is not listed here: install the CPU wheel separately (see PLAN.md §3)
 nlp = ["transformers", "wordfreq"]

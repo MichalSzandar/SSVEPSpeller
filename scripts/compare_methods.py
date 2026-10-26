@@ -32,12 +32,23 @@ def plot_results(df, path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data", choices=["synthetic", "benchmark", "recording"], default="synthetic")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--data", choices=["synthetic", "benchmark", "recording"], default="synthetic"
+    )
     parser.add_argument("--subjects", type=int, nargs="+", default=[1, 2, 3])
     parser.add_argument("--recordings", nargs="+", default=[])
-    parser.add_argument("--windows", type=float, nargs="+", default=[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0])
-    parser.add_argument("--name", default=None, help="output file stem (default: derived from --data)")
+    parser.add_argument(
+        "--windows",
+        type=float,
+        nargs="+",
+        default=[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0],
+    )
+    parser.add_argument(
+        "--name", default=None, help="output file stem (default: derived from --data)"
+    )
     args = parser.parse_args()
     raise NotImplementedError
 

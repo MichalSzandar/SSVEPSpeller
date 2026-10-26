@@ -12,11 +12,13 @@ SPEC.loader.exec_module(check_lsl)
 
 def test_stddev_by_channel_pairs_labels_and_values():
     labels = ["O1", "Oz"]
-    samples = np.array([
-        [0.10, 0.20],
-        [0.40, 0.50],
-        [0.30, 0.60],
-    ])
+    samples = np.array(
+        [
+            [0.10, 0.20],
+            [0.40, 0.50],
+            [0.30, 0.60],
+        ]
+    )
 
     pairs = check_lsl.stddev_by_channel(labels, samples)
 

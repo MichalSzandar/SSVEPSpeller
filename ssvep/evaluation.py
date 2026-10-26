@@ -31,7 +31,9 @@ def itr(n_targets: int, accuracy: float, trial_time: float) -> float:
     return bits_per_selection * 60.0 / trial_time
 
 
-def leave_one_block_out(estimator, X: np.ndarray, y: np.ndarray, blocks: np.ndarray) -> float:
+def leave_one_block_out(
+    estimator, X: np.ndarray, y: np.ndarray, blocks: np.ndarray
+) -> float:
     """Mean accuracy over folds, each fold leaving out one block."""
     raise NotImplementedError
 
