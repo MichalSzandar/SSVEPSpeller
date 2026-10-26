@@ -13,20 +13,23 @@ All filters work along the last axis (time) and accept any number of leading axe
 """
 
 import numpy as np
+from scipy.signal import butter, filtfilt, sosfiltfilt, iirnotch
 
 
 def notch(
     X: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0
 ) -> np.ndarray:
     """Zero-phase notch filter removing mains interference at ``freq`` Hz."""
-    raise NotImplementedError
+    b, a = iirnotch(w0=freq, Q=quality, fs=fs)
+    return filtfilt(b, a, X, axis=-1)
 
 
 def bandpass(
     X: np.ndarray, fs: float, low: float, high: float, order: int = 4
 ) -> np.ndarray:
     """Zero-phase band-pass filter between ``low`` and ``high`` Hz."""
-    raise NotImplementedError
+    sos = butter(order, [low, high], btype="band", fs=fs, output="sos")
+    return sosfiltfilt(sos, X, axis=-1)
 
 
 def filter_bank_weights(
@@ -46,7 +49,15 @@ def filter_bank(X: np.ndarray, fs: float, n_subbands: int = 5) -> np.ndarray:
 
 def crop(X: np.ndarray, fs: float, start: float, duration: float) -> np.ndarray:
     """Keep the samples in [start, start + duration) seconds along the last axis."""
-    raise NotImplementedError
+    ns = int(round(duration * fs))
+    start = int(round(start * fs))
+
+    if start < 0 or start + ns > X.shape[-1]:
+        raise ValueError(
+            f"Crop window [{start/fs:.3f}, {(start+ns)/fs:.3f}) s "
+            f"outside the signal length {X.shape[-1]/fs:.3f} s"
+        )
+    return X[..., start : start + ns]
 
 
 def bad_trial_mask(X: np.ndarray, max_ptp: float) -> np.ndarray:
