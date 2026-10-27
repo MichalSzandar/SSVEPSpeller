@@ -62,6 +62,18 @@ def grid_layout(
     return np.array(centres), size
 
 
+def trial_sequence(
+    n_targets: int, n_blocks: int, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
+    """Calibration order -> (targets, blocks), each (n_blocks * n_targets,).
+
+    Every block shows each target exactly once, in a new random order.
+    """
+    targets = np.concatenate([rng.permutation(n_targets) for _ in range(n_blocks)])
+    blocks = np.repeat(np.arange(n_blocks), n_targets)
+    return targets, blocks
+
+
 def dropped_frames(flip_times: np.ndarray, refresh_rate: float) -> np.ndarray:
     """Missed refreshes before each flip -> (n_flips - 1,) ints, 0 = flip on time."""
     intervals = np.diff(flip_times)

@@ -12,6 +12,7 @@ from ssvep.stimulus import (
     luminance,
     next_frame_index,
     timing_report,
+    trial_sequence,
 )
 
 R = 120.0
@@ -83,6 +84,25 @@ def test_next_frame_index_keeps_phase_after_dropped_frame():
     expected = refreshes.copy()
     expected[50] = 50  # drawn for refresh 50, but displayed one refresh late
     assert shown == expected.tolist()
+
+
+def test_trial_sequence_balanced_blocks():
+    """Each block holds every target exactly once; blocks run 0, 0, ..., 1, 1, ..."""
+    targets, blocks = trial_sequence(5, 6, np.random.default_rng(0))
+    assert targets.shape == blocks.shape == (30,)
+    assert blocks.tolist() == [b for b in range(6) for _ in range(5)]
+    for b in range(6):
+        assert sorted(targets[blocks == b].tolist()) == [0, 1, 2, 3, 4]
+
+
+def test_trial_sequence_is_shuffled_and_reproducible():
+    """Not every block uses the same order; the same seed gives the same sequence."""
+    targets, _ = trial_sequence(5, 6, np.random.default_rng(0))
+    orders = {tuple(block) for block in targets.reshape(6, 5)}
+    assert len(orders) > 1
+
+    again, _ = trial_sequence(5, 6, np.random.default_rng(0))
+    assert np.array_equal(targets, again)
 
 
 def test_dropped_frames():

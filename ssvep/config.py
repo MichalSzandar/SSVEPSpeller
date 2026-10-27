@@ -26,6 +26,12 @@ CAP_CHANNELS: list[str] = []
 TARGET_FREQS = [8.0, 10.0, 12.0, 14.0, 15.0]  # Hz
 TARGET_PHASES = [0.0] * len(TARGET_FREQS)  # rad, one per target (JFPM)
 
+# --- Calibration protocol --------------------------------------------------------
+N_BLOCKS = 6  # every block shows each target once, in random order
+CUE_DURATION = 2.0  # s, red frame on the next target
+STIM_DURATION = 5.0  # s, flicker per trial
+MARKER_STREAM = "SSVEP-Markers"  # LSL stream with the GUI's JSON event markers
+
 # --- Processing ----------------------------------------------------------------
 BANDPASS = (7.0, 90.0)  # Hz, single band for non-filter-bank methods
 N_HARMONICS = 5  # harmonics in the CCA reference signals
