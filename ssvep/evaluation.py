@@ -11,9 +11,23 @@ import pandas as pd
 
 
 def itr(n_targets: int, accuracy: float, trial_time: float) -> float:
-    """Information transfer rate in bits/min; 0 for accuracy at or below chance (1/N)."""
-    if n_targets <= 0 or trial_time <= 0:
-        return 0.0
+    """Information transfer rate in bits/min; 0 for accuracy at or below chance (1/N).
+
+    n_targets : number of targets (N)
+    accuracy  : proportion of correct selections (P)
+    trial_time: seconds per selection (window + gaze shift) (T)
+
+    Raises ValueError if any argument is out of range.
+    """
+
+    if n_targets <= 0:
+        raise ValueError(f"n_targets must be positive, got {n_targets}")
+
+    if accuracy < 0.0 or accuracy > 1.0:
+        raise ValueError(f"accuracy must be in [0, 1], got {accuracy}")
+
+    if trial_time <= 0.0:
+        raise ValueError(f"trial_time must be positive, got {trial_time}")
 
     chance = 1.0 / n_targets
     if accuracy <= chance:

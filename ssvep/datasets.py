@@ -55,8 +55,8 @@ def benchmark_channel_indices(channels: list[str]) -> np.ndarray:
 
 def load_benchmark(
     subject: int,
-    freqs: list[float] | None = config.TARGET_FREQS,
-    channels: list[str] | None = config.BENCHMARK_CHANNELS,
+    freqs: list[float] = config.TARGET_FREQS,
+    channels: list[str] = config.BENCHMARK_CHANNELS,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load ``S{subject}.mat`` from ``config.BENCHMARK_DIR``.
 
@@ -97,7 +97,7 @@ def load_recording(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def make_synthetic(
-    freqs: list[float] | None = config.TARGET_FREQS,
+    freqs: list[float] = config.TARGET_FREQS,
     fs: float = config.BENCHMARK_FS,
     n_blocks: int = 6,
     n_channels: int = len(config.BENCHMARK_CHANNELS),
@@ -114,29 +114,36 @@ def make_synthetic(
     frequency (random amplitude and phase per channel and harmonic), plus Gaussian
     noise scaled to ``snr_db``. ``freqs`` defaults to ``config.TARGET_FREQS``.
     """
-
+    n_noise_samples = int(round(pre * fs))
     n_targets = len(freqs)
-    n_samples = int(round((pre + duration) * fs))
+    n_samples = int(round(duration * fs))
     rng = np.random.default_rng(seed)
+    t_vec = np.arange(n_samples) / fs
 
+    phases = rng.uniform(0.0, 2 * np.pi, size=n_harmonics)
     # (blocks, targets, channels, samples)
-    X = np.zeros((n_blocks, n_targets, n_channels, n_samples), dtype=np.float32)
+    X = np.zeros(
+        (n_blocks, n_targets, n_channels, n_samples + n_noise_samples), dtype=np.float32
+    )
     for b in range(n_blocks):
         for t, f in enumerate(freqs):
             for c in range(n_channels):
-                # Random amplitude and phase per channel and harmonic.
+                # Random amplitude per channel and harmonic.
                 amps = rng.uniform(0.5, 1.0, size=n_harmonics)
-                phases = rng.uniform(0.0, 2 * np.pi, size=n_harmonics)
-                t_vec = np.arange(n_samples) / fs
+
                 signal = sum(
                     amp * np.sin(2 * np.pi * (h + 1) * f * t_vec + phase)
                     for h, (amp, phase) in enumerate(zip(amps, phases))
                 )
+
                 noise_std = np.sqrt(np.mean(signal**2)) / (10 ** (snr_db / 20))
                 noise = rng.normal(0.0, noise_std, size=n_samples)
-                X[b, t, c, :] = signal + noise
+                X[b, t, c, n_noise_samples:] = signal + noise
 
-    X = X.reshape(n_blocks * n_targets, n_channels, n_samples)
+                noise = rng.normal(0.0, noise_std, size=n_noise_samples)
+                X[b, t, c, :n_noise_samples] = noise
+
+    X = X.reshape(n_blocks * n_targets, n_channels, n_samples + n_noise_samples)
     y = np.tile(np.arange(n_targets), n_blocks)
     blocks = np.repeat(np.arange(n_blocks), n_targets)
     return X, y, blocks

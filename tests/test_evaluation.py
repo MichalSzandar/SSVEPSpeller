@@ -13,6 +13,22 @@ def test_itr_perfect_accuracy():
     )
 
 
+def test_itr_zero_accuracy():
+    # P = 0 -> B = 0 bits per selection.
+    assert itr(n_targets=40, accuracy=0.0, trial_time=1.0) == 0.0
+
+
+def test_itr_raises_value_error_for_invalid_arguments():
+    with pytest.raises(ValueError):
+        itr(n_targets=0, accuracy=0.5, trial_time=1.0)
+    with pytest.raises(ValueError):
+        itr(n_targets=40, accuracy=-0.1, trial_time=1.0)
+    with pytest.raises(ValueError):
+        itr(n_targets=40, accuracy=1.1, trial_time=1.0)
+    with pytest.raises(ValueError):
+        itr(n_targets=40, accuracy=0.5, trial_time=0.0)
+
+
 @pytest.mark.skip(reason="TODO")
 def test_itr_at_chance_is_zero():
     """N = 5, P = 0.2 -> 0 bits/min."""
