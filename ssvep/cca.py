@@ -13,6 +13,7 @@ the sub-band scores being combined with filter-bank weights.
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from scipy.linalg import orth, svd
+from ssvep.preprocessing import filter_bank_weights
 
 
 def reference_signals(
@@ -73,6 +74,7 @@ class CCA(BaseEstimator, ClassifierMixin):
         n_targets = len(self.freqs)
         scores = np.zeros((n_trials, n_targets), dtype=np.float32)
 
+        w = filter_bank_weights(n_bands, self.fb_a, self.fb_b)
         for i, freq in enumerate(self.freqs):
             Y = reference_signals(freq, self.fs, X.shape[-1], self.n_harmonics)
             for m in range(n_bands):
@@ -80,8 +82,7 @@ class CCA(BaseEstimator, ClassifierMixin):
                     [canonical_correlation(X[t, m], Y) for t in range(n_trials)]
                 )
                 if n_bands > 1:
-                    w = self.fb_a / (m + 1) + self.fb_b
-                    scores[:, i] += w * rho**2
+                    scores[:, i] += w[m] * rho**2
                 else:
                     scores[:, i] = rho
 

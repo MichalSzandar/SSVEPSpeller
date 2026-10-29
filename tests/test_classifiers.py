@@ -8,7 +8,8 @@ from sklearn.cross_decomposition import CCA as SklearnCCA
 
 from ssvep import config
 from ssvep.cca import CCA, canonical_correlation, reference_signals
-from ssvep.preprocessing import bandpass, crop
+from ssvep.datasets import make_synthetic
+from ssvep.preprocessing import bandpass, crop, filter_bank
 
 fs = config.BENCHMARK_FS
 freqs = config.TARGET_FREQS
@@ -21,6 +22,23 @@ def prepare(X, duration):
     """
     X = bandpass(X, fs, *config.BANDPASS)[:, None]
     return crop(X, fs, start=0.5, duration=duration)
+
+
+def prepare_fb(X, duration):
+    """Raw synthetic epochs -> filter-bank input (n_trials, N_SUBBANDS, n_channels, n_window)."""
+    X = filter_bank(X, fs, config.N_SUBBANDS)
+    return crop(X, fs, start=0.5, duration=duration)
+
+
+def add_alpha(X, amplitude, seed):
+    """Add a 9.5-10.5 Hz rhythm: random frequency and phase per trial, random gain per channel."""
+    rng = np.random.default_rng(seed)
+    n_trials, n_channels, n_samples = X.shape
+    t = np.arange(n_samples) / fs
+    phase = rng.uniform(0, 2 * np.pi, size=(n_trials, 1, 1))
+    gain = rng.uniform(0.5, 1.0, size=(n_trials, n_channels, 1))
+    freq = rng.uniform(9.5, 10.5, size=(n_trials, 1, 1))
+    return X + amplitude * gain * np.sin(2 * np.pi * freq * t + phase)
 
 
 def random_signals(n_rows, n_samples, seed):
@@ -154,6 +172,65 @@ def test_fbcca_uses_every_band(synthetic_easy, synthetic_noise_only):
     X_easy, y, _ = synthetic_easy
     X = np.concatenate([prepare(X_noise, 1.0), prepare(X_easy, 1.0)], axis=1)
     assert CCA(freqs, fs).fit(X, y).score(X, y) > 0.9
+
+
+def test_cca_single_band_scores_are_correlations():
+    """With n_bands = 1 the score is the canonical correlation itself (no weight, no square)."""
+    X = np.random.default_rng(8).normal(size=(4, 1, 3, 250))
+    scores = CCA(freqs, fs).fit(X).decision_function(X)
+    for i, freq in enumerate(freqs):
+        Y = reference_signals(freq, fs, 250)
+        expected = [canonical_correlation(X[t, 0], Y) for t in range(4)]
+        assert np.allclose(scores[:, i], expected)
+
+
+@pytest.mark.parametrize(
+    "fb_a, fb_b, weights",
+    [
+        (1.25, 0.25, [1.25, 0.67045, 0.50328]),  # Chen 2015
+        (0.0, 0.0, [1.0, 1.0, 1.0]),
+        (2.0, 0.5, [1.5, 0.75, 0.5 + 1 / 9]),
+    ],
+)
+def test_fbcca_scores_are_weighted_squared_correlations(fb_a, fb_b, weights):
+    """With n_bands = 3: score = sum over bands of w(m) * rho_m**2, where rho_m is band m's
+    canonical correlation with the target's references and w(m) = m**(-fb_a) + fb_b."""
+    X = np.random.default_rng(7).normal(size=(4, 3, 3, 250))
+    scores = CCA(freqs, fs, fb_a=fb_a, fb_b=fb_b).fit(X).decision_function(X)
+    for i, freq in enumerate(freqs):
+        Y = reference_signals(freq, fs, 250)
+        for t in range(4):
+            rho = np.array([canonical_correlation(X[t, m], Y) for m in range(3)])
+            assert np.isclose(scores[t, i], np.sum(weights * rho**2), rtol=1e-4)
+
+
+@pytest.mark.parametrize("duration", [0.5, 1.0])
+def test_fbcca_filter_bank_easy_data(synthetic_easy, duration):
+    """Input from filter_bank(): accuracy > 0.95 at 0.5 s and 1 s windows."""
+    X, y, _ = synthetic_easy
+    X = prepare_fb(X, duration)
+    assert X.shape[1] == config.N_SUBBANDS
+    assert CCA(freqs, fs).fit(X, y).score(X, y) > 0.95
+
+
+def test_fbcca_filter_bank_noise_only_is_near_chance(synthetic_noise_only):
+    """Accuracy well below 0.6 (chance is 1/5)."""
+    X, y, _ = synthetic_noise_only
+    X = prepare_fb(X, 1.0)
+    assert CCA(freqs, fs).fit(X, y).score(X, y) < 0.6
+
+
+def test_fbcca_resists_alpha_rhythm():
+    """A strong ~10 Hz rhythm on top of a weak SSVEP fools single-band CCA towards the 10 Hz
+    target. The higher sub-bands contain no alpha, so FBCCA keeps accuracy > 0.9 and beats
+    CCA by > 0.3 (1 s window)."""
+    X, y, _ = make_synthetic(snr_db=-10.0, n_blocks=10, seed=0)
+    X = add_alpha(X, amplitude=2.0, seed=0)
+    X_cca, X_fb = prepare(X, 1.0), prepare_fb(X, 1.0)
+    acc_cca = CCA(freqs, fs).fit(X_cca, y).score(X_cca, y)
+    acc_fbcca = CCA(freqs, fs).fit(X_fb, y).score(X_fb, y)
+    assert acc_fbcca > 0.9, f"FBCCA {acc_fbcca:.2f}"
+    assert acc_fbcca - acc_cca > 0.3, f"CCA {acc_cca:.2f}, FBCCA {acc_fbcca:.2f}"
 
 
 @pytest.mark.skip(reason="TODO")
