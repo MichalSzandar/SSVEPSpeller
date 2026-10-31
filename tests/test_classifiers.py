@@ -241,13 +241,16 @@ def test_fbcca_resists_alpha_rhythm():
 
 def trca_trials(n_trials=5, n_channels=6, n_samples=250, seed=0):
     """Trials of one target, (n_trials, n_channels, n_samples): the same waveform in every
-    trial with a random gain per channel, plus noise whose level differs between channels."""
+    trial with a random gain per channel, plus noise whose level differs between channels.
+    """
     rng = np.random.default_rng(seed)
     t = np.arange(n_samples) / fs
     source = np.sin(2 * np.pi * 10 * t) + 0.5 * np.sin(2 * np.pi * 20 * t + 1.0)
     gain = rng.normal(size=(n_channels, 1))
     noise_level = rng.uniform(0.5, 3.0, size=(n_channels, 1))
-    return gain * source + noise_level * rng.normal(size=(n_trials, n_channels, n_samples))
+    return gain * source + noise_level * rng.normal(
+        size=(n_trials, n_channels, n_samples)
+    )
 
 
 def reproducibility(w, X):
@@ -286,14 +289,16 @@ def test_trca_filter_maximises_reproducibility(snr):
     X = snr * X + np.random.default_rng(1).normal(size=X.shape)
     returned = reproducibility(trca_spatial_filter(X), X)
     optimum = max(
-        -minimize(lambda v: -reproducibility(v, X), start).fun for start in np.eye(X.shape[1])
+        -minimize(lambda v: -reproducibility(v, X), start).fun
+        for start in np.eye(X.shape[1])
     )
     assert returned >= optimum - 1e-6, f"returned {returned:.6f}, optimum {optimum:.6f}"
 
 
 def test_trca_filter_cancels_noise_shared_by_two_channels():
     """ch0 = SSVEP + n, ch1 = n, ch2 = unrelated noise, where n is strong noise that changes
-    from trial to trial. Only ch0 - ch1 is reproducible, so w is proportional to [1, -1, 0]."""
+    from trial to trial. Only ch0 - ch1 is reproducible, so w is proportional to [1, -1, 0].
+    """
     rng = np.random.default_rng(2)
     s = np.sin(2 * np.pi * 10 * np.arange(250) / fs)
     n = 3.0 * rng.normal(size=(5, 250))
@@ -307,7 +312,9 @@ def test_trca_filter_ignores_offsets_and_overall_gain():
     all data scaled by a constant, leaves the filter unchanged up to sign and scale."""
     X = trca_trials()
     w = trca_spatial_filter(X.copy())
-    offsets = np.random.default_rng(3).normal(scale=100.0, size=(X.shape[0], X.shape[1], 1))
+    offsets = np.random.default_rng(3).normal(
+        scale=100.0, size=(X.shape[0], X.shape[1], 1)
+    )
     assert cos_similarity(trca_spatial_filter(X + offsets), w) > 0.9999
     assert cos_similarity(trca_spatial_filter(1e-3 * X), w) > 0.9999
 
@@ -333,7 +340,9 @@ def test_trca_filter_flat_channel_gets_zero_weight():
 def lobo_accuracy(estimator, X, y, blocks):
     """Leave-one-block-out accuracy, computed by scikit-learn (independent of evaluation.py)."""
     cv = LeaveOneGroupOut()
-    return cross_val_score(estimator, X, y, groups=blocks, cv=cv, error_score="raise").mean()
+    return cross_val_score(
+        estimator, X, y, groups=blocks, cv=cv, error_score="raise"
+    ).mean()
 
 
 def random_trials(n_bands, seed, n_blocks=3, n_channels=4, n_samples=200):
@@ -399,13 +408,16 @@ def test_trca_filters_come_from_trca_spatial_filter():
     for k in range(len(freqs)):
         for m in range(2):
             trials = np.array([X[i, m] for i in range(len(y)) if y[i] == k])
-            assert cos_similarity(clf.filters_[m, k], trca_spatial_filter(trials)) > 0.9999
+            assert (
+                cos_similarity(clf.filters_[m, k], trca_spatial_filter(trials)) > 0.9999
+            )
 
 
 @pytest.mark.parametrize("ensemble", [False, True])
 def test_trca_single_band_scores_are_correlations(ensemble):
     """n_bands = 1: score[t, k] is the correlation r between the filtered test trial and the
-    filtered template of target k (see band_correlations), with no weight and no square."""
+    filtered template of target k (see band_correlations), with no weight and no square.
+    """
     X, y = random_trials(n_bands=1, seed=13)
     X_test = np.random.default_rng(14).normal(size=(4, 1, 4, 200))
     clf = TRCA(ensemble=ensemble).fit(X, y)
@@ -455,7 +467,9 @@ def test_trca_rejects_test_windows_of_another_length():
 def test_trca_easy_data(synthetic_easy, ensemble, duration):
     """Single band: leave-one-block-out accuracy > 0.95 for TRCA and eTRCA."""
     X, y, blocks = synthetic_easy
-    assert lobo_accuracy(TRCA(ensemble=ensemble), prepare(X, duration), y, blocks) > 0.95
+    assert (
+        lobo_accuracy(TRCA(ensemble=ensemble), prepare(X, duration), y, blocks) > 0.95
+    )
 
 
 def test_fb_etrca_easy_data(synthetic_easy):

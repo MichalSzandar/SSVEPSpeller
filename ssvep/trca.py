@@ -58,7 +58,9 @@ class TRCA(BaseEstimator, ClassifierMixin):
         Test windows must have the same length as the training windows.
         """
         self.classes_ = np.unique(y)
-        self.templates_ =  np.zeros((len(self.classes_), X.shape[1], X.shape[2], X.shape[3]))
+        self.templates_ = np.zeros(
+            (len(self.classes_), X.shape[1], X.shape[2], X.shape[3])
+        )
         self.filters_ = np.zeros((X.shape[1], len(self.classes_), X.shape[2]))
 
         for i, target in enumerate(self.classes_):
@@ -89,7 +91,12 @@ class TRCA(BaseEstimator, ClassifierMixin):
                     trial_filtered = self.filters_[m, i] @ X[:, m]
 
                 rho = np.array(
-                    [np.corrcoef(trial_filtered[t].ravel(), template_filtered.ravel())[0, 1] for t in range(n_trials)]
+                    [
+                        np.corrcoef(
+                            trial_filtered[t].ravel(), template_filtered.ravel()
+                        )[0, 1]
+                        for t in range(n_trials)
+                    ]
                 )
                 if n_bands > 1:
                     scores[:, i] += w[m] * rho
@@ -97,7 +104,6 @@ class TRCA(BaseEstimator, ClassifierMixin):
                     scores[:, i] = rho
 
         return scores
-
 
     def predict(self, X):
         """Label (entry of ``classes_``) with the highest score, shape (n_trials,)."""
