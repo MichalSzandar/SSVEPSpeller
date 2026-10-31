@@ -8,6 +8,8 @@ N = number of targets, P = accuracy, T = seconds per selection (window + gaze sh
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import LeaveOneGroupOut, cross_val_score
+from ssvep.preprocessing import crop
 
 
 def itr(n_targets: int, accuracy: float, trial_time: float) -> float:
@@ -48,8 +50,14 @@ def itr(n_targets: int, accuracy: float, trial_time: float) -> float:
 def leave_one_block_out(
     estimator, X: np.ndarray, y: np.ndarray, blocks: np.ndarray
 ) -> float:
-    """Mean accuracy over folds, each fold leaving out one block."""
-    raise NotImplementedError
+    """Mean accuracy over folds, each fold leaving out one block.
+
+    The estimator is cloned for every fold; the one passed in stays unfitted.
+    """
+    scores = cross_val_score(
+        estimator, X, y, groups=blocks, cv=LeaveOneGroupOut(), error_score="raise"
+    )
+    return float(scores.mean())
 
 
 def window_sweep(
@@ -70,4 +78,16 @@ def window_sweep(
 
     Returns a DataFrame with columns ``window, accuracy, itr``.
     """
-    raise NotImplementedError
+    results = []
+    for window in windows:
+        X_window = crop(X, fs, start=start, duration=window)
+        accuracy = leave_one_block_out(make_estimator(), X_window, y, blocks)
+        trial_time = window + (gaze_shift if gaze_shift is not None else 0.0)
+        results.append(
+            {
+                "window": window,
+                "accuracy": accuracy,
+                "itr": itr(len(np.unique(y)), accuracy, trial_time),
+            }
+        )
+    return pd.DataFrame(results)

@@ -6,11 +6,11 @@ from scipy.linalg import subspace_angles
 from scipy.optimize import minimize
 from sklearn.base import clone
 from sklearn.cross_decomposition import CCA as SklearnCCA
-from sklearn.model_selection import LeaveOneGroupOut, cross_val_score
 
 from ssvep import config
 from ssvep.cca import CCA, canonical_correlation, reference_signals
 from ssvep.datasets import make_synthetic
+from ssvep.evaluation import leave_one_block_out
 from ssvep.preprocessing import bandpass, crop, filter_bank, filter_bank_weights
 from ssvep.trca import TRCA, trca_spatial_filter
 
@@ -337,14 +337,6 @@ def test_trca_filter_flat_channel_gets_zero_weight():
 # --- TRCA classifier -----------------------------------------------------------
 
 
-def lobo_accuracy(estimator, X, y, blocks):
-    """Leave-one-block-out accuracy, computed by scikit-learn (independent of evaluation.py)."""
-    cv = LeaveOneGroupOut()
-    return cross_val_score(
-        estimator, X, y, groups=blocks, cv=cv, error_score="raise"
-    ).mean()
-
-
 def random_trials(n_bands, seed, n_blocks=3, n_channels=4, n_samples=200):
     """Pure-noise data in classifier format: every target once per block, labels 0..4."""
     rng = np.random.default_rng(seed)
@@ -467,19 +459,20 @@ def test_trca_rejects_test_windows_of_another_length():
 def test_trca_easy_data(synthetic_easy, ensemble, duration):
     """Single band: leave-one-block-out accuracy > 0.95 for TRCA and eTRCA."""
     X, y, blocks = synthetic_easy
-    assert (
-        lobo_accuracy(TRCA(ensemble=ensemble), prepare(X, duration), y, blocks) > 0.95
-    )
+    X = prepare(X, duration)
+    assert leave_one_block_out(TRCA(ensemble=ensemble), X, y, blocks) > 0.95
 
 
 def test_fb_etrca_easy_data(synthetic_easy):
     """Filter-bank input: leave-one-block-out accuracy > 0.95 for FB-eTRCA (1 s window)."""
     X, y, blocks = synthetic_easy
-    assert lobo_accuracy(TRCA(ensemble=True), prepare_fb(X, 1.0), y, blocks) > 0.95
+    X = prepare_fb(X, 1.0)
+    assert leave_one_block_out(TRCA(ensemble=True), X, y, blocks) > 0.95
 
 
 @pytest.mark.parametrize("ensemble", [False, True])
 def test_trca_noise_only_is_near_chance(synthetic_noise_only, ensemble):
     """Leave-one-block-out accuracy well below 0.6 (chance is 1/5)."""
     X, y, blocks = synthetic_noise_only
-    assert lobo_accuracy(TRCA(ensemble=ensemble), prepare(X, 1.0), y, blocks) < 0.6
+    X = prepare(X, 1.0)
+    assert leave_one_block_out(TRCA(ensemble=ensemble), X, y, blocks) < 0.6
