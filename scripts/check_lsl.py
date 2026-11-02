@@ -16,22 +16,12 @@ import pylsl
 from scipy.signal import welch
 from matplotlib import pyplot as plt
 from ssvep import config
+from ssvep.acquisition import channel_labels
 
 
 def list_streams(wait_time: float) -> list[pylsl.StreamInfo]:
     """All streams visible on the network."""
     return pylsl.resolve_streams(wait_time=wait_time)
-
-
-def channel_labels(inlet: pylsl.StreamInlet) -> list[str]:
-    """Channel labels from the stream's XML description."""
-    xml = inlet.info().as_xml()
-    labels = []
-    for line in xml.splitlines():
-        if "<label>" in line:
-            label = line.strip().removeprefix("<label>").removesuffix("</label>")
-            labels.append(label)
-    return labels
 
 
 def record(inlet: pylsl.StreamInlet, seconds: float) -> tuple[np.ndarray, np.ndarray]:
@@ -145,7 +135,7 @@ def main():
 
     inlet = pylsl.StreamInlet(selected_stream)
 
-    ch_labels = channel_labels(inlet)
+    ch_labels = channel_labels(inlet.info())
     print(f"Channel labels: {ch_labels}")
     print(
         f"\nRecording {args.seconds:.1f} seconds from stream {selected_stream.name()}..."

@@ -90,8 +90,10 @@ def load_benchmark(
 def load_recording(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Load an own calibration recording as (X, y, blocks).
 
-    Epochs are cut around the ``stim_on`` markers with the same pre-stimulus length
-    as Benchmark (``config.BENCHMARK_ONSET``), so the same pipeline works on both.
+    ``path`` is a .npz written by ``acquisition.Recorder`` (format at the top of
+    ssvep/acquisition.py). Epochs are cut around the ``stim_on`` markers with the same
+    pre-stimulus length as Benchmark (``config.BENCHMARK_ONSET``), so the same
+    pipeline works on both.
     """
     raise NotImplementedError
 
