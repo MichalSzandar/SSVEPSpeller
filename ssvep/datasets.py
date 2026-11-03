@@ -8,6 +8,7 @@ Every loader returns the same triple:
     blocks : (n_trials,)  block/run index, used for leave-one-block-out CV
 """
 
+import json
 from pathlib import Path
 from scipy.io import loadmat
 
@@ -93,9 +94,67 @@ def load_recording(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     ``path`` is a .npz written by ``acquisition.Recorder`` (format at the top of
     ssvep/acquisition.py). Epochs are cut around the ``stim_on`` markers with the same
     pre-stimulus length as Benchmark (``config.BENCHMARK_ONSET``), so the same
-    pipeline works on both.
+    pipeline works on both. Like a Benchmark epoch, each one is that pre-stimulus
+    part, the flicker (``stim_s`` from ``session_start``) and as long again after it.
+
+    Only the ``config.CAP_CHANNELS`` channels are kept, in that order (all channels
+    while it is empty). Trials cut short by ESC (``stim_off`` with ``complete`` false)
+    and trials that are not fully in the recording are dropped.
     """
-    raise NotImplementedError
+    with np.load(path) as npz:
+        eeg = npz["eeg"]  # (channels, samples)
+        eeg_times = npz["eeg_times"]
+        markers = npz["markers"]
+        marker_times = npz["marker_times"]
+        channels = [str(c) for c in npz["channels"]]
+        fs = float(npz["fs"])
+
+    # Every marker is one JSON string -> array of dicts, so a boolean mask works on it
+    markers = np.array([json.loads(m) for m in markers])
+
+    # Keep the occipital channels, in the order of config.CAP_CHANNELS
+    if config.CAP_CHANNELS:
+        missing = [c for c in config.CAP_CHANNELS if c not in channels]
+        if missing:
+            raise ValueError(f"{path} has no channels {missing}")
+        eeg = eeg[[channels.index(c) for c in config.CAP_CHANNELS]]
+
+    stim_s = config.STIM_DURATION  # unless session_start says otherwise
+    for m in markers:
+        if m["event"] == "session_start":
+            stim_s = m["stim_s"]
+    pre_samples = int(round(config.BENCHMARK_ONSET * fs))
+    # Pre-stimulus part, flicker, and as long again after it
+    n_samples = pre_samples + int(round(stim_s * fs)) + pre_samples
+
+    # Find the stim_on markers of the trials that were not cut short.
+    incomplete = [
+        m["trial"] for m in markers if m["event"] == "stim_off" and not m["complete"]
+    ]
+    stim_on_mask = np.array(
+        [m["event"] == "stim_on" and m["trial"] not in incomplete for m in markers],
+        dtype=bool,
+    )
+    stim_on_markers = markers[stim_on_mask]
+    stim_on_marker_times = marker_times[stim_on_mask]
+
+    # Cut epochs around the stim_on markers.
+    X_epochs, y, blocks = [], [], []
+    for i in range(len(stim_on_markers)):
+        # LSL time -> index of the first EEG sample at or after the onset flip
+        sample_idx = np.searchsorted(eeg_times, stim_on_marker_times[i])
+        epoch_start = sample_idx - pre_samples
+        epoch_end = epoch_start + n_samples
+        if epoch_start < 0 or epoch_end > eeg.shape[1]:
+            continue  # the recording started late or stopped early
+        X_epochs.append(eeg[:, epoch_start:epoch_end])  # (channels, samples)
+        y.append(stim_on_markers[i]["target"])
+        blocks.append(stim_on_markers[i]["block"])
+
+    if not X_epochs:
+        raise ValueError(f"No complete trials in {path}")
+    X_epochs = np.stack(X_epochs, axis=0)  # (trials, channels, samples)
+    return X_epochs, np.array(y), np.array(blocks)
 
 
 def make_synthetic(

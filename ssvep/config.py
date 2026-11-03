@@ -23,7 +23,7 @@ REFRESH_RATE = 120  # Hz, monitor refresh rate
 CAP_CHANNELS: list[str] = []
 
 # --- Stimulus ------------------------------------------------------------------
-TARGET_FREQS = [8.0, 10.0, 12.0, 14.0, 15.0]  # Hz
+TARGET_FREQS = [8.0, 9.4, 10.8, 12.2, 13.6, 15.0]  # Hz, all on the Benchmark grid
 TARGET_PHASES = [0.0] * len(TARGET_FREQS)  # rad, one per target (JFPM)
 
 # --- Calibration protocol --------------------------------------------------------
