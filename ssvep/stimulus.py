@@ -38,28 +38,47 @@ def next_frame_index(last_flip: float, onset: float, refresh_rate: float) -> int
     return int(round((last_flip - onset) * refresh_rate)) + 1
 
 
-def grid_layout(
-    n_targets: int, width: float, height: float, fill: float = 0.6
+def ring_layout(
+    n_targets: int,
+    width: float,
+    height: float,
+    slots: list[int] | None = None,
+    fill: float = 0.6,
+    margin: float = 0.05,
 ) -> tuple[np.ndarray, float]:
-    """Centres of square targets on a near-square grid -> (centres (n_targets, 2), size).
+    """Centres of square targets on a ring around the screen centre -> (centres
+    (n_targets, 2), size).
 
-    Rows are filled from the top, and a shorter last row is centred. Coordinates are
-    pixels with the origin at the bottom left (pyglet convention). ``fill`` is the
-    fraction of a grid cell covered by its square.
+    The middle of the screen stays free for the speller's typed text (Hex-o-Spell
+    style), and every target is equally far from it. Slots are numbered clockwise,
+    starting with the top-left one (with 6 targets: top left, top right, right,
+    bottom right, bottom left, left). Target k is drawn in slot ``slots[k]`` (default:
+    slot k). Coordinates are pixels with the origin at the bottom left (pyglet
+    convention). ``fill`` is the fraction of the distance between neighbouring centres
+    covered by a square, ``margin`` the free border as a fraction of the shorter side.
     """
-    n_cols = int(np.ceil(np.sqrt(n_targets)))
-    n_rows = int(np.ceil(n_targets / n_cols))
-    cell = min(width / n_cols, height / n_rows)
-    size = fill * cell
+    if n_targets < 2:
+        raise ValueError("A ring needs at least 2 targets")
+    if slots is None:
+        slots = list(range(n_targets))
+    if sorted(slots) != list(range(n_targets)):
+        raise ValueError(f"slots must be a permutation of 0..{n_targets - 1}: {slots}")
 
-    centres = []
-    for k in range(n_targets):
-        row, col = divmod(k, n_cols)
-        n_in_row = min(n_cols, n_targets - row * n_cols)
-        x = width / 2 + (col - (n_in_row - 1) / 2) * cell
-        y = height / 2 + ((n_rows - 1) / 2 - row) * cell
-        centres.append((x, y))
-    return np.array(centres), size
+    # Slot 0 is the first one clockwise from 12 o'clock, half a step past it
+    step = 2 * np.pi / n_targets
+    angles = np.pi / 2 + step / 2 - step * np.arange(n_targets)
+    cos, sin = np.cos(angles), np.sin(angles)
+    # Radius r of the largest ring whose squares (half side fill * r * sin(pi/n), from
+    # the neighbour distance 2 * r * sin(pi/n)) stay inside the margins
+    half_side = fill * np.sin(np.pi / n_targets)
+    border = margin * min(width, height)
+    r = min(
+        (width / 2 - border) / (np.max(np.abs(cos)) + half_side),
+        (height / 2 - border) / (np.max(np.abs(sin)) + half_side),
+    )
+
+    slot_centres = np.column_stack([width / 2 + r * cos, height / 2 + r * sin])
+    return slot_centres[slots], 2 * half_side * r
 
 
 def trial_sequence(

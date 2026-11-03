@@ -50,8 +50,9 @@ def test_psd_features_are_log_power():
 @pytest.mark.parametrize("duration", [0.25, 0.5, 1.0, 2.0])
 def test_psd_features_measure_every_frequency_separately(duration):
     """No feature is a copy of another one: each target frequency and harmonic is read at
-    its own frequency, also in short windows whose spectral bins are wider than the 1 Hz
-    gap between 14 and 15 Hz. (The 5 targets with 2 harmonics share no frequency.)"""
+    its own frequency, also in short windows whose spectral bins are wider than the 1.4 Hz
+    gap between neighbouring targets. (The 6 targets with 2 harmonics share no
+    frequency.)"""
     F = psd_features(
         noise_trials(n_trials=20, n_channels=2, duration=duration), fs, freqs
     )
@@ -107,7 +108,7 @@ def test_psd_lda_easy_data(synthetic_easy, duration):
 
 
 def test_psd_lda_noise_only_is_near_chance(synthetic_noise_only):
-    """Leave-one-block-out accuracy well below 0.6 (chance is 1/5)."""
+    """Leave-one-block-out accuracy well below 0.6 (chance is 1/6)."""
     X, y, blocks = synthetic_noise_only
     X = prepare(X, 1.0)
     assert leave_one_block_out(make_psd_lda(fs, freqs), X, y, blocks) < 0.6

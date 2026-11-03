@@ -22,20 +22,20 @@ analysis, the calibration app and the online speller all use the same code.
 
 ## Offline results so far
 
-Benchmark dataset, subjects S1–S3, 5 targets (8, 10, 12, 14, 15 Hz), 9
-parieto-occipital channels, leave-one-block-out cross-validation (6 folds). The
-window starts 0.14 s after stimulus onset (visual latency). ITR counts the window plus
-0.5 s for the gaze shift. Values are means over the 3 subjects, so they are only a
-first check; chance level is 20 %.
+Benchmark dataset, subjects S1–S3, the speller's 6 targets (8.0, 9.4, 10.8, 12.2,
+13.6, 15.0 Hz), 9 parieto-occipital channels, leave-one-block-out cross-validation
+(6 folds). The window starts 0.14 s after stimulus onset (visual latency). ITR counts
+the window plus 0.5 s for the gaze shift. Values are means over the 3 subjects, so
+they are only a first check; chance level is 16.7 %.
 
 | Method | Accuracy at 1 s | Best ITR (bits/min) | Window at best ITR |
 |---|---|---|---|
-| CCA | 88.9 % | 70.3 | 0.75 s |
-| FBCCA | 95.6 % | 91.9 | 0.75 s |
-| TRCA | 97.8 % | 94.2 | 0.5 s |
-| eTRCA | 100 % | 123.7 | 0.25 s |
-| FB-eTRCA | 100 % | 133.8 | 0.5 s |
-| PSD+LDA | 63.3 % | 28.3 | 1.0 s |
+| CCA | 85.2 % | 69.8 | 1.25 s |
+| FBCCA | 98.1 % | 97.6 | 1.0 s |
+| TRCA | 100 % | 121.8 | 0.5 s |
+| eTRCA | 100 % | 150.1 | 0.5 s |
+| FB-eTRCA | 100 % | 158.8 | 0.25 s |
+| PSD+LDA | 45.4 % | 22.3 | 1.0 s |
 
 To reproduce: `scripts/compare_methods.py --data benchmark --subjects 1 2 3` (see
 [Usage](#usage)).
@@ -113,6 +113,11 @@ A session has 6 blocks. Each block shows every target once, in random order: a 2
 cue (red frame) followed by 5 s of flicker. The subject starts each block with SPACE;
 ESC quits. Event markers go to the LSL stream `SSVEP-Markers` as JSON strings, each
 timestamped with the flip that showed the event.
+
+The 6 targets sit on a ring around the screen centre, where the speller will show the
+typed text, in the same positions the speller uses. `config.TARGET_SLOTS` decides
+which frequency goes where: clockwise from the top left, 8.0, 10.8, 13.6, 9.4, 12.2 and
+15.0 Hz, so targets next to each other are at least 2.8 Hz apart.
 
 ### Record a calibration session (in progress)
 

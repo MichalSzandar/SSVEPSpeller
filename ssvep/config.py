@@ -25,6 +25,10 @@ CAP_CHANNELS: list[str] = []
 # --- Stimulus ------------------------------------------------------------------
 TARGET_FREQS = [8.0, 9.4, 10.8, 12.2, 13.6, 15.0]  # Hz, all on the Benchmark grid
 TARGET_PHASES = [0.0] * len(TARGET_FREQS)  # rad, one per target (JFPM)
+# Targets sit on a ring around the typed text (Hex-o-Spell style), slots numbered
+# clockwise from the top left. Target k is drawn in slot TARGET_SLOTS[k], which puts
+# 8.0, 10.8, 13.6, 9.4, 12.2, 15.0 Hz clockwise: spatial neighbours are >= 2.8 Hz apart.
+TARGET_SLOTS = [0, 3, 1, 4, 2, 5]
 
 # --- Calibration protocol --------------------------------------------------------
 N_BLOCKS = 6  # every block shows each target once, in random order

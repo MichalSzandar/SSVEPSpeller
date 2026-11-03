@@ -34,13 +34,14 @@ def prepare_fb(X, duration):
 
 
 def add_alpha(X, amplitude, seed):
-    """Add a 9.5-10.5 Hz rhythm: random frequency and phase per trial, random gain per channel."""
+    """Add a 10.3-11.3 Hz rhythm (around the 10.8 Hz target, inside the alpha band): random
+    frequency and phase per trial, random gain per channel."""
     rng = np.random.default_rng(seed)
     n_trials, n_channels, n_samples = X.shape
     t = np.arange(n_samples) / fs
     phase = rng.uniform(0, 2 * np.pi, size=(n_trials, 1, 1))
     gain = rng.uniform(0.5, 1.0, size=(n_trials, n_channels, 1))
-    freq = rng.uniform(9.5, 10.5, size=(n_trials, 1, 1))
+    freq = rng.uniform(10.3, 11.3, size=(n_trials, 1, 1))
     return X + amplitude * gain * np.sin(2 * np.pi * freq * t + phase)
 
 
@@ -153,7 +154,7 @@ def test_cca_handles_changing_window_length(synthetic_easy):
 
 
 def test_cca_noise_only_is_near_chance(synthetic_noise_only):
-    """Accuracy well below 0.6 (chance is 1/5)."""
+    """Accuracy well below 0.6 (chance is 1/6)."""
     X, y, _ = synthetic_noise_only
     X = prepare(X, 1.0)
     assert CCA(freqs, fs).fit(X, y).score(X, y) < 0.6
@@ -217,15 +218,15 @@ def test_fbcca_filter_bank_easy_data(synthetic_easy, duration):
 
 
 def test_fbcca_filter_bank_noise_only_is_near_chance(synthetic_noise_only):
-    """Accuracy well below 0.6 (chance is 1/5)."""
+    """Accuracy well below 0.6 (chance is 1/6)."""
     X, y, _ = synthetic_noise_only
     X = prepare_fb(X, 1.0)
     assert CCA(freqs, fs).fit(X, y).score(X, y) < 0.6
 
 
 def test_fbcca_resists_alpha_rhythm():
-    """A strong ~10 Hz rhythm on top of a weak SSVEP fools single-band CCA towards the 10 Hz
-    target. The higher sub-bands contain no alpha, so FBCCA keeps accuracy > 0.9 and beats
+    """A strong ~10.8 Hz alpha rhythm on top of a weak SSVEP fools single-band CCA towards the
+    10.8 Hz target. The higher sub-bands contain no alpha, so FBCCA keeps accuracy > 0.9 and beats
     CCA by > 0.3 (1 s window)."""
     X, y, _ = make_synthetic(snr_db=-10.0, n_blocks=10, seed=0)
     X = add_alpha(X, amplitude=2.0, seed=0)
@@ -472,7 +473,7 @@ def test_fb_etrca_easy_data(synthetic_easy):
 
 @pytest.mark.parametrize("ensemble", [False, True])
 def test_trca_noise_only_is_near_chance(synthetic_noise_only, ensemble):
-    """Leave-one-block-out accuracy well below 0.6 (chance is 1/5)."""
+    """Leave-one-block-out accuracy well below 0.6 (chance is 1/6)."""
     X, y, blocks = synthetic_noise_only
     X = prepare(X, 1.0)
     assert leave_one_block_out(TRCA(ensemble=ensemble), X, y, blocks) < 0.6

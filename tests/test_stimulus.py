@@ -5,12 +5,13 @@ import itertools
 import numpy as np
 import pytest
 
+from ssvep import config
 from ssvep.stimulus import (
     dropped_frames,
     gray_levels,
-    grid_layout,
     luminance,
     next_frame_index,
+    ring_layout,
     timing_report,
     trial_sequence,
 )
@@ -133,12 +134,12 @@ def test_timing_report():
 
 @pytest.mark.parametrize(
     "n_targets, width, height",
-    [(n, 1920, 1200) for n in range(1, 10)] + [(5, 800, 600), (6, 1200, 1920)],
+    [(n, 1920, 1200) for n in range(2, 10)] + [(6, 800, 600), (6, 1200, 1920)],
 )
-def test_grid_layout_fits_without_overlap(n_targets, width, height):
-    """n centres; every square lies inside the window, squares don't overlap, and the
-    whole grid is centred on the screen."""
-    centres, size = grid_layout(n_targets, width, height)
+def test_ring_layout_fits_without_overlap(n_targets, width, height):
+    """n centres; every square lies inside the window, squares don't overlap, and all
+    centres are equally far from the screen centre."""
+    centres, size = ring_layout(n_targets, width, height)
     assert centres.shape == (n_targets, 2)
     assert size > 0
 
@@ -147,15 +148,62 @@ def test_grid_layout_fits_without_overlap(n_targets, width, height):
     assert np.all(y - size / 2 >= 0) and np.all(y + size / 2 <= height)
     for a, b in itertools.combinations(centres, 2):
         assert max(abs(a - b)) >= size
-    assert (x.min() + x.max()) / 2 == pytest.approx(width / 2)
-    assert (y.min() + y.max()) / 2 == pytest.approx(height / 2)
+    radii = np.hypot(x - width / 2, y - height / 2)
+    assert np.allclose(radii, radii[0])
 
 
-def test_grid_layout_rows_from_top():
-    """5 targets: 3 on the top row, 2 centred below; target 0 is top left."""
-    centres, _ = grid_layout(5, 1920, 1200)
-    top, bottom = centres[:3], centres[3:]
-    assert np.allclose(top[:, 1], top[0, 1]) and np.allclose(bottom[:, 1], bottom[0, 1])
-    assert top[0, 1] > bottom[0, 1]
-    assert np.all(np.diff(top[:, 0]) > 0) and np.all(np.diff(bottom[:, 0]) > 0)
-    assert bottom[:, 0].mean() == pytest.approx(960)
+def test_ring_layout_leaves_the_middle_free():
+    """6 targets on 1920x1200: a 600 x 300 px box at the screen centre (room for the
+    typed text) touches no square, and the targets are still large (> 200 px)."""
+    centres, size = ring_layout(6, 1920, 1200)
+    box_half = np.array([300, 150])
+    gap = np.abs(centres - [960, 600]) - box_half - size / 2
+    assert np.all(gap.max(axis=1) > 0)
+    assert size > 200
+
+
+def test_ring_layout_slots_clockwise_from_top_left():
+    """Default slots for 6 targets: top left, top right, right, bottom right,
+    bottom left, left (angles 120, 60, 0, -60, -120, 180 degrees)."""
+    centres, _ = ring_layout(6, 1920, 1200)
+    radius = np.hypot(*(centres[0] - [960, 600]))
+    angles = np.radians([120, 60, 0, -60, -120, 180])
+    expected = np.column_stack(
+        [960 + radius * np.cos(angles), 600 + radius * np.sin(angles)]
+    )
+    assert np.allclose(centres, expected)
+
+
+def test_ring_layout_puts_target_k_in_slot_k():
+    """With ``slots``, target k is drawn where slot slots[k] is in the default layout."""
+    slots = [0, 3, 1, 4, 2, 5]
+    default, size = ring_layout(6, 1920, 1200)
+    centres, size_slots = ring_layout(6, 1920, 1200, slots)
+    assert size_slots == pytest.approx(size)
+    for k, slot in enumerate(slots):
+        assert np.allclose(centres[k], default[slot])
+
+
+@pytest.mark.parametrize(
+    "n_targets, slots",
+    [(6, [0, 1, 2, 3, 4]), (6, [0, 0, 1, 2, 3, 4]), (6, [1, 2, 3, 4, 5, 6]), (1, None)],
+)
+def test_ring_layout_rejects_bad_input(n_targets, slots):
+    """slots that are not a permutation of 0..n-1, or fewer than 2 targets: ValueError."""
+    with pytest.raises(ValueError):
+        ring_layout(n_targets, 1920, 1200, slots)
+
+
+def test_config_slots_keep_neighbouring_frequencies_apart():
+    """config.TARGET_SLOTS places every target; targets next to each other on the ring
+    differ by at least twice the smallest spacing between any two target frequencies."""
+    freqs = np.array(config.TARGET_FREQS)
+    n = len(freqs)
+    assert sorted(config.TARGET_SLOTS) == list(range(n))
+
+    centres, _ = ring_layout(n, 1920, 1200, config.TARGET_SLOTS)
+    dist = np.hypot(*(centres[:, None] - centres[None]).transpose(2, 0, 1))
+    neighbour = np.isclose(dist, dist[dist > 0].min())
+    min_spacing = np.diff(np.sort(freqs)).min()
+    for a, b in zip(*np.nonzero(neighbour)):
+        assert abs(freqs[a] - freqs[b]) >= 2 * min_spacing - 1e-9, (freqs[a], freqs[b])

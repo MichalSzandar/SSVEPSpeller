@@ -38,13 +38,17 @@ def test_make_synthetic_shapes():
 
 @needs_benchmark
 def test_load_benchmark_shapes():
-    """S1, 5 targets, 9 channels -> X (30, 9, 1500), y in {0..4}, blocks in {0..5}."""
+    """S1, config.TARGET_FREQS (6 targets), 9 channels -> X (36, 9, 1500), y in {0..5},
+    blocks in {0..5}; every target appears once per block."""
     X, y, blocks = load_benchmark(1)
-    assert X.shape == (30, 9, 1500)
-    assert y.shape == (30,)
-    assert blocks.shape == (30,)
-    assert np.all(y >= 0) and np.all(y < 5)
+    n = 6 * len(config.TARGET_FREQS)
+    assert X.shape == (n, 9, 1500)
+    assert y.shape == (n,)
+    assert blocks.shape == (n,)
+    assert np.all(y >= 0) and np.all(y < len(config.TARGET_FREQS))
     assert np.all(blocks >= 0) and np.all(blocks < 6)
+    for b in range(6):
+        assert sorted(y[blocks == b].tolist()) == list(range(len(config.TARGET_FREQS)))
 
 
 # --- load_recording ---------------------------------------------------------------------

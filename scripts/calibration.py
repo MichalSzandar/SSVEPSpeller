@@ -11,9 +11,14 @@ A trial is a red frame around the target (config.CUE_DURATION s) followed by the
 flicker (config.STIM_DURATION s). The subject rests between blocks and starts the
 next one with SPACE. ESC quits.
 
+The targets are placed exactly as in the speller: on a ring around the screen centre
+(stimulus.ring_layout), target k in slot config.TARGET_SLOTS[k]. The centre, where the
+speller shows the typed text, stays empty.
+
 Markers go to the LSL stream config.MARKER_STREAM as JSON strings, each timestamped
 with the LSL time of the flip that showed the event (stim_on = first flicker flip):
-    session_start  subject, freqs, phases, refresh_rate, n_blocks, cue_s, stim_s
+    session_start  subject, freqs, phases, refresh_rate, n_blocks, cue_s, stim_s,
+                   slots, screen_px, centres_px, size_px
     block_start    block
     cue            trial, block, target, freq
     stim_on        trial, block, target, freq
@@ -53,29 +58,43 @@ TEXT_COLOR = (160, 160, 160, 255)
 CUE_COLOR = (220, 30, 30)
 CUE_GAP = 16  # px between a target and its cue frame
 CUE_THICKNESS = 8  # px
+LABEL_GAP = 8  # px between the cue frame and a frequency label
 
 
 class FlickerScene:
-    """Square targets with frequency labels and a red cue frame."""
+    """Square targets on the speller ring, with frequency labels and a red cue frame."""
 
     def __init__(
         self,
         window: pyglet.window.Window,
         freqs: list[float],
         phases: list[float],
+        slots: list[int],
         refresh_rate: float,
     ):
         self.freqs = freqs
         self.phases = phases
+        self.slots = slots
         self.refresh_rate = refresh_rate
+        self.screen = (window.width, window.height)
         self.batch = pyglet.graphics.Batch()
-        self.centres, self.size = stimulus.grid_layout(
-            len(freqs), window.width, window.height
+        self.centres, self.size = stimulus.ring_layout(
+            len(freqs), window.width, window.height, slots
         )
         half = self.size / 2
+        label_gap = half + CUE_GAP + CUE_THICKNESS + LABEL_GAP
         self.squares = []
         self.labels = []
         for (x, y), freq in zip(self.centres, freqs):
+            # The label goes just outside the cue frame, on the side facing the screen
+            # centre (the outer side may have no room): above/below or beside the target
+            dx, dy = window.width / 2 - x, window.height / 2 - y
+            if abs(dy) > abs(dx) / 2:
+                label_pos = (x, y + np.sign(dy) * label_gap)
+                anchor = ("center", "bottom" if dy > 0 else "top")
+            else:
+                label_pos = (x + np.sign(dx) * label_gap, y)
+                anchor = ("left" if dx > 0 else "right", "center")
             square = shapes.Rectangle(
                 x - half,
                 y - half,
@@ -86,10 +105,10 @@ class FlickerScene:
             )
             label = pyglet.text.Label(
                 f"{freq:g} Hz",
-                x=x,
-                y=y - half - CUE_GAP - 30,
-                anchor_x="center",
-                anchor_y="center",
+                x=label_pos[0],
+                y=label_pos[1],
+                anchor_x=anchor[0],
+                anchor_y=anchor[1],
                 font_size=14,
                 color=TEXT_COLOR,
                 batch=self.batch,
@@ -365,6 +384,10 @@ def calibration(
         n_blocks=args.blocks,
         cue_s=args.cue,
         stim_s=args.stim,
+        slots=scene.slots,
+        screen_px=scene.screen,
+        centres_px=scene.centres.round(1).tolist(),
+        size_px=round(scene.size, 1),
     )
     rows = run_session(window, scene, outlet, args.blocks, args.cue, args.stim)
     aborted = window.has_exit
@@ -433,6 +456,9 @@ def flicker_test(
         refresh_rate=scene.refresh_rate,
         freqs=scene.freqs,
         phases=scene.phases,
+        slots=scene.slots,
+        centres=scene.centres,
+        size=scene.size,
         windowed=args.windowed,
         aborted=aborted,
     )
@@ -484,7 +510,11 @@ def main():
 
     window = open_window(args.screen, args.windowed)
     scene = FlickerScene(
-        window, config.TARGET_FREQS, config.TARGET_PHASES, args.refresh_rate
+        window,
+        config.TARGET_FREQS,
+        config.TARGET_PHASES,
+        config.TARGET_SLOTS,
+        args.refresh_rate,
     )
     if args.test:
         text = "Flicker test\n\nSPACE to start, ESC to quit"

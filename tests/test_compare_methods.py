@@ -50,7 +50,7 @@ def test_main_writes_one_csv_row_per_subject_method_window_and_a_figure(tmp_path
 
 
 def test_every_method_runs_end_to_end(tmp_path):
-    """All methods, one subject, one window: each one is clearly above chance (0.2)."""
+    """All methods, one subject, one window: each one is clearly above chance (1/6)."""
     args = "--data synthetic --subjects 1 --windows 1.0 --name all"
     compare_methods.main(args.split() + ["--out-dir", str(tmp_path)])
     df = pd.read_csv(tmp_path / "all.csv")
