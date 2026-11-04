@@ -7,6 +7,7 @@ import pytest
 
 from ssvep import config
 from ssvep.stimulus import (
+    centre_box,
     dropped_frames,
     gray_levels,
     luminance,
@@ -207,3 +208,55 @@ def test_config_slots_keep_neighbouring_frequencies_apart():
     min_spacing = np.diff(np.sort(freqs)).min()
     for a, b in zip(*np.nonzero(neighbour)):
         assert abs(freqs[a] - freqs[b]) >= 2 * min_spacing - 1e-9, (freqs[a], freqs[b])
+
+
+def overlaps(box, centres, reach):
+    """True if box (x, y, w, h) overlaps a square of half side ``reach`` around any
+    centre (touching edges do not count)."""
+    x, y, w, h = box
+    cx, cy = centres[:, 0], centres[:, 1]
+    return bool(
+        np.any(
+            (x < cx + reach)
+            & (x + w > cx - reach)
+            & (y < cy + reach)
+            & (y + h > cy - reach)
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "width, height", [(1920, 1200), (800, 600), (1280, 720), (1200, 1920)]
+)
+def test_centre_box_is_centred_clear_and_maximal(width, height):
+    """On the speller ring: the box is centred, has the requested aspect, keeps the
+    clearance from every square and stays on screen, and growing it by 1 % breaks one
+    of these."""
+    centres, size = ring_layout(6, width, height, config.TARGET_SLOTS)
+    clearance, aspect = 40.0, 1.4
+    x, y, w, h = centre_box(centres, size, width, height, clearance, aspect)
+
+    assert x + w / 2 == pytest.approx(width / 2)
+    assert y + h / 2 == pytest.approx(height / 2)
+    assert w / h == pytest.approx(aspect)
+    reach = size / 2 + clearance - 1e-6
+    assert not overlaps((x, y, w, h), centres, reach)
+    assert x >= 0 and y >= 0 and x + w <= width and y + h <= height
+
+    grown = (x - 0.005 * w, y - 0.005 * h, 1.01 * w, 1.01 * h)
+    off_screen = grown[0] < 0 or grown[1] < 0
+    assert overlaps(grown, centres, size / 2 + clearance) or off_screen
+
+
+def test_centre_box_known_value():
+    """One 100 px square 300 px right of the centre of a 1000 x 1000 screen, no
+    clearance, aspect 2: the box may reach 250 px to the right, so it is 500 x 250."""
+    centres = np.array([[800.0, 500.0]])
+    box = centre_box(centres, 100.0, 1000, 1000, clearance=0.0, aspect=2.0)
+    assert box == pytest.approx((250.0, 375.0, 500.0, 250.0))
+
+
+def test_centre_box_without_room_raises():
+    """A square on the screen centre leaves no room: ValueError."""
+    with pytest.raises(ValueError):
+        centre_box(np.array([[500.0, 500.0]]), 100.0, 1000, 1000, 10.0, 1.5)

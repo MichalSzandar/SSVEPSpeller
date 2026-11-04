@@ -16,7 +16,8 @@ analysis, the calibration app and the online speller all use the same code.
 | Calibration app: sampled-sinusoid flicker at 120 Hz, cue → flicker → rest protocol, LSL markers timestamped at the frame flip, dropped-frame log | done |
 | Acquisition over LSL: inlets, ring buffer, recorder, fake EEG stream for testing without the cap | in progress |
 | Bad-trial and bad-channel rejection | planned |
-| Online backend and speller GUI | planned |
+| Speller GUI: synchronous trials on the calibration ring, labels and typed text from the backend, JSON protocol over LSL | done |
+| Online backend: classification, speller state | planned |
 | Word prediction: unigram baseline, distilgpt2 re-ranking | planned |
 | Online copy-spelling experiment, with and without word prediction | planned |
 
@@ -134,6 +135,29 @@ described at the top of [ssvep/acquisition.py](ssvep/acquisition.py).
 `compare_methods.py --data recording --recordings data/recordings/*.npz` then runs the
 same comparison on your own data.
 
+### Online speller GUI
+
+The GUI runs the synchronous trials and draws what the backend sends; the backend
+classifies and owns the speller state. Run each command in its own terminal:
+
+```bash
+.venv/bin/python scripts/fake_eeg_stream.py              # only without the cap
+.venv/bin/python scripts/online.py                       # backend (planned)
+.venv/bin/python scripts/speller_gui.py --subject S01    # waits for the backend
+.venv/bin/python scripts/record.py --subject S01         # then press SPACE in the GUI
+```
+
+One trial: 0.5 s with the labels shown (a red frame if the backend cues a target),
+2 s of flicker with the labels hidden (so the stimulus looks the same as in
+calibration), then the answer: a green frame around the selected target and the new
+text for 0.5 s, then the new labels. SPACE starts and pauses, ESC quits. The trial
+table goes to `data/recordings/<subject>_<date>_online.csv`; the recording loads with
+`load_recording` like a calibration session.
+
+`speller_gui.py --demo --windowed` runs without a backend: a stand-in cues a random
+target in every trial and selects it. On the real screen (without `--windowed`) it
+prints the dropped frames, the same check as `calibration.py --test`.
+
 ## How it works
 
 ### Signal processing
@@ -153,7 +177,7 @@ Every classifier is a scikit-learn estimator that takes this 4-D input. Labels a
 indices into `config.TARGET_FREQS`. With one band, `CCA` and `TRCA` are the plain
 methods; with filter-bank input they become FBCCA and FB-(e)TRCA.
 
-### Online system (planned)
+### Online system
 
 ```
 ┌──────────────────────────┐  LSL "SSVEP-Markers" (JSON)  ┌───────────────────────────────┐
@@ -166,7 +190,8 @@ methods; with filter-bank input they become FBCCA and FB-(e)TRCA.
 ```
 
 The GUI only draws, so model inference never delays a frame. The backend owns the
-speller state and tells the GUI what to show.
+speller state and tells the GUI what to show. The messages in both directions are
+described in [ssvep/protocol.py](ssvep/protocol.py).
 
 ## Project layout
 
@@ -181,12 +206,14 @@ ssvep/
   evaluation.py      ITR, leave-one-block-out, window sweep
   stimulus.py        flicker luminance, target layout, trial order, frame timing
   acquisition.py     LSL inlets, ring buffer, recorder
+  protocol.py        JSON messages between the speller GUI and the backend
 scripts/
   check_lsl.py       inspect a live LSL stream
   compare_methods.py offline comparison -> results/*.csv, *.png
   calibration.py     calibration GUI and flicker timing test
   fake_eeg_stream.py synthetic EEG stream that reacts to the markers
   record.py          record EEG + markers to .npz
+  speller_gui.py     online speller GUI (--demo runs without a backend)
 notebooks/           exploring Benchmark, CCA and FBCCA on Benchmark
 tests/               pytest; uses synthetic data, Benchmark tests are skipped without the files
 ```

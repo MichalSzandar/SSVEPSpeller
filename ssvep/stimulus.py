@@ -81,6 +81,34 @@ def ring_layout(
     return slot_centres[slots], 2 * half_side * r
 
 
+def centre_box(
+    centres: np.ndarray,
+    size: float,
+    width: float,
+    height: float,
+    clearance: float,
+    aspect: float,
+) -> tuple[float, float, float, float]:
+    """Largest rectangle centred on the screen, ``aspect`` times wider than high, that
+    stays ``clearance`` px away from every target square -> (x, y, w, h), bottom-left
+    corner and size in pixels.
+
+    centres : (n_targets, 2) square centres, size : square side (as from ring_layout).
+    The speller puts its typed text in this box.
+    """
+    distance = np.abs(np.asarray(centres) - [width / 2, height / 2])
+    reach = size / 2 + clearance
+    # A square is clear of the box if it lies beyond it horizontally or vertically
+    half_h = np.min(
+        np.maximum((distance[:, 0] - reach) / aspect, distance[:, 1] - reach)
+    )
+    half_h = min(half_h, height / 2, width / 2 / aspect)
+    if half_h <= 0:
+        raise ValueError("No room between the targets for a text box")
+    half_w = aspect * half_h
+    return width / 2 - half_w, height / 2 - half_h, 2 * half_w, 2 * half_h
+
+
 def trial_sequence(
     n_targets: int, n_blocks: int, rng: np.random.Generator
 ) -> tuple[np.ndarray, np.ndarray]:

@@ -36,6 +36,11 @@ CUE_DURATION = 2.0  # s, red frame on the next target
 STIM_DURATION = 5.0  # s, flicker per trial
 MARKER_STREAM = "SSVEP-Markers"  # LSL stream with the GUI's JSON event markers
 
+# --- Online speller ----------------------------------------------------------------
+STATE_STREAM = "SSVEP-State"  # LSL stream with the backend's JSON speller state
+ONLINE_STIM_DURATION = 2.0  # s, flicker per selection, >= the classifier window
+FEEDBACK_DURATION = 0.5  # s, selected target framed in green before the labels change
+
 # --- Processing ----------------------------------------------------------------
 BANDPASS = (7.0, 90.0)  # Hz, single band for non-filter-bank methods
 N_HARMONICS = 5  # harmonics in the CCA reference signals

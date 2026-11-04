@@ -71,6 +71,7 @@ class FlickerScene:
         phases: list[float],
         slots: list[int],
         refresh_rate: float,
+        freq_labels: bool = True,
     ):
         self.freqs = freqs
         self.phases = phases
@@ -103,6 +104,9 @@ class FlickerScene:
                 color=(0, 0, 0),
                 batch=self.batch,
             )
+            self.squares.append(square)
+            if not freq_labels:
+                continue
             label = pyglet.text.Label(
                 f"{freq:g} Hz",
                 x=label_pos[0],
@@ -113,7 +117,6 @@ class FlickerScene:
                 color=TEXT_COLOR,
                 batch=self.batch,
             )
-            self.squares.append(square)
             self.labels.append(label)
 
         outer = self.size + 2 * CUE_GAP
@@ -142,7 +145,9 @@ class FlickerScene:
         self.batch.draw()
 
 
-def open_window(screen_index: int, windowed: bool) -> pyglet.window.Window:
+def open_window(
+    screen_index: int, windowed: bool, caption: str = "SSVEP calibration"
+) -> pyglet.window.Window:
     """Fullscreen vsync'd window on the given screen, or a small window for debugging."""
     # pyglet lists screens with XRRGetScreenResources, which makes the X server
     # re-probe the monitor. Right after a refresh-rate change in GNOME Settings this
@@ -150,7 +155,7 @@ def open_window(screen_index: int, windowed: bool) -> pyglet.window.Window:
     # state without probing.
     xrandr.XRRGetScreenResources = xrandr.XRRGetScreenResourcesCurrent
     if windowed:
-        return pyglet.window.Window(800, 600, caption="SSVEP calibration", vsync=True)
+        return pyglet.window.Window(800, 600, caption=caption, vsync=True)
     screen = pyglet.display.get_display().get_screens()[screen_index]
     window = pyglet.window.Window(fullscreen=True, screen=screen, vsync=True)
     window.set_mouse_visible(False)

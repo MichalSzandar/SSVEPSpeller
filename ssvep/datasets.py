@@ -102,11 +102,11 @@ def load_recording(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     and trials that are not fully in the recording are dropped.
     """
     with np.load(path) as npz:
-        eeg = npz["eeg"]  # (channels, samples)
-        eeg_times = npz["eeg_times"]
-        markers = npz["markers"]
-        marker_times = npz["marker_times"]
-        channels = [str(c) for c in npz["channels"]]
+        eeg = np.asarray(npz["eeg"])  # (channels, samples)
+        eeg_times = np.asarray(npz["eeg_times"])
+        markers = np.asarray(npz["markers"])
+        marker_times = np.asarray(npz["marker_times"])
+        channels = [str(c) for c in np.asarray(npz["channels"])]
         fs = float(npz["fs"])
 
     # Every marker is one JSON string -> array of dicts, so a boolean mask works on it

@@ -65,11 +65,14 @@ class FakeEEG:
 
         stim_on starts the response at its ``freq`` from ``timestamp + latency``;
         stim_off ends it at ``timestamp + latency``. session_start's ``phases`` (one per
-        target, rad) set each target's starting phase (default 0). Other events are
+        target, rad) set each target's starting phase (default 0). A stim_on whose target
+        is null (an online trial nobody cued) gives noise only. Other events are
         ignored.
         """
         marker_data = json.loads(marker)
-        if marker_data["event"] == "stim_on":
+        if marker_data["event"] == "stim_on" and marker_data["target"] is None:
+            self.stim_on = None
+        elif marker_data["event"] == "stim_on":
             self.stim_on = timestamp + self.latency
             self.stim_off = None  # the previous trial's end
             self.freq = marker_data["freq"]

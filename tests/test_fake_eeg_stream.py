@@ -140,6 +140,20 @@ def test_other_markers_are_ignored():
     assert np.array_equal(g.generate(times(0.0, 2.0)), quiet.generate(times(0.0, 2.0)))
 
 
+def test_stim_on_without_target_is_noise_only():
+    """An online stim_on with target and freq null (free spelling) right after a cued
+    trial: noise only, no leftover response from the previous trial."""
+    g = fake.FakeEEG(n_channels=2, fs=FS, snr_db=10.0, latency=0.0, seed=9)
+    quiet = fake.FakeEEG(n_channels=2, fs=FS, snr_db=10.0, latency=0.0, seed=9)
+    g.on_marker(marker("stim_on", trial=0, block=0, target=2, freq=10.8), 0.0)
+    g.on_marker(marker("stim_off", trial=0, block=0, target=2, freq=10.8), 2.0)
+    g.on_marker(marker("stim_on", trial=1, block=0, target=None, freq=None), 4.0)
+    quiet.on_marker(marker("block_start", block=0), 0.0)
+    assert np.array_equal(g.generate(times(4.0, 2.0)), quiet.generate(times(4.0, 2.0)))
+    g.on_marker(marker("stim_off", trial=1, block=0, target=None, freq=None), 6.0)
+    assert np.array_equal(g.generate(times(6.0, 1.0)), quiet.generate(times(6.0, 1.0)))
+
+
 def test_eeg_outlet_describes_the_stream():
     """Type EEG, regular rate fs, float32, one channel per label, labels in the XML."""
     labels = ["O1", "Oz", "O2"]
