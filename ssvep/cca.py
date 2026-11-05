@@ -7,7 +7,8 @@ Input convention for every classifier in this package:
     X : (n_trials, n_bands, n_channels, n_samples), already filtered and cropped
 
 With n_bands == 1 this class is standard CCA; with filter-bank input it is FBCCA,
-the sub-band scores being combined with filter-bank weights.
+the sub-band scores being combined with filter-bank weights. NormalizedCCA is the
+only variant that uses training data: it z-scores each target's score.
 """
 
 import numpy as np
@@ -91,3 +92,29 @@ class CCA(BaseEstimator, ClassifierMixin):
     def predict(self, X):
         """Target index with the highest score, shape (n_trials,)."""
         return np.argmax(self.decision_function(X), axis=1)
+
+
+class NormalizedCCA(CCA):
+    """(FB)CCA with each target's score z-scored with statistics from calibration trials.
+
+    Background EEG (1/f, alpha) correlates more with the low-frequency references, so on
+    weak data plain CCA favours low-frequency targets. ``fit`` stores the mean and std of
+    every target's score over the training trials; ``decision_function`` returns
+    (score - mean) / std, so all targets compete on the same scale.
+
+    Fit on windows of the same length as the ones you score (correlations grow as the
+    window shrinks) and on a balanced set (every target equally often, as in calibration).
+    """
+
+    def fit(self, X, y=None):
+        """Store ``score_mean_`` and ``score_std_`` (n_targets,) over the trials in ``X``."""
+        super().fit(X, y)
+        scores = super().decision_function(X)
+        self.score_mean_ = scores.mean(axis=0)
+        self.score_std_ = scores.std(axis=0)
+        self.score_std_[self.score_std_ == 0] = 1.0  # a constant score: only centre it
+        return self
+
+    def decision_function(self, X):
+        """Scores (n_trials, n_targets), z-scored per target with the training statistics."""
+        return (super().decision_function(X) - self.score_mean_) / self.score_std_

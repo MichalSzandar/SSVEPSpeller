@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -23,8 +24,18 @@ def test_methods_have_a_band_count_and_a_fresh_estimator_factory():
         second = factory(config.TARGET_FREQS, config.BENCHMARK_FS)
         assert first is not second, name
         assert hasattr(first, "fit") and hasattr(first, "predict"), name
-    assert len(compare_methods.COLORS) >= len(compare_methods.METHODS)
-    assert len(compare_methods.MARKERS) >= len(compare_methods.METHODS)
+
+
+def test_every_method_has_a_plot_style():
+    """A color and a marker per base method; a normalised variant needs its base method."""
+    names = list(compare_methods.METHODS)
+    bases = [n for n in names if not n.endswith(compare_methods.NORM_SUFFIX)]
+    for name in names:
+        assert name.removesuffix(compare_methods.NORM_SUFFIX) in bases, name
+    assert len(compare_methods.COLORS) >= len(bases)
+    assert len(compare_methods.MARKERS) >= len(bases)
+    # Variants come after all base methods, so adding one never shifts a base's color
+    assert names[: len(bases)] == bases
 
 
 def test_synthetic_windows_start_at_the_signal_plus_latency():
@@ -35,6 +46,36 @@ def test_synthetic_windows_start_at_the_signal_plus_latency():
         assert subject == "synthetic1"
         assert fs == config.BENCHMARK_FS
         assert got == pytest.approx(start)
+
+
+def test_recordings_are_scored_with_their_own_frequencies(monkeypatch):
+    """--data recording yields each file's session_start freqs (not config.TARGET_FREQS),
+    the cap channel labels, EEG_FS, and the file name as the subject."""
+    X = np.zeros((2, len(config.CAP_CHANNELS), 1500))
+    monkeypatch.setattr(
+        compare_methods,
+        "load_recording",
+        lambda path: (X, np.array([0, 1]), np.zeros(2)),
+    )
+    monkeypatch.setattr(compare_methods, "recording_freqs", lambda path: [8.0, 10.0])
+    args = SimpleNamespace(data="recording", recordings=["dir/rec1.npz"], latency=None)
+    ((subject, _, _, _, channels, freqs, fs, _),) = compare_methods.load_dataset(args)
+    assert subject == "rec1"
+    assert freqs == [8.0, 10.0]
+    assert channels == config.CAP_CHANNELS
+    assert fs == config.EEG_FS
+
+
+def test_rejection_changes_nothing_on_clean_synthetic_data(tmp_path):
+    """Default rejection and --trial-ratio 0 --channel-ratio 0 give the same accuracies on
+    clean synthetic data (nothing to reject)."""
+    common = "--data synthetic --subjects 1 --windows 1.0 --methods CCA-norm eTRCA"
+    compare_methods.main(common.split() + ["--name", "on", "--out-dir", str(tmp_path)])
+    off = "--trial-ratio 0 --channel-ratio 0 --name off"
+    compare_methods.main(common.split() + off.split() + ["--out-dir", str(tmp_path)])
+    on = pd.read_csv(tmp_path / "on.csv")
+    off = pd.read_csv(tmp_path / "off.csv")
+    pd.testing.assert_frame_equal(on, off)
 
 
 def test_main_writes_one_csv_row_per_subject_method_window_and_a_figure(tmp_path):

@@ -27,9 +27,14 @@ with the LSL time of the flip that showed the event (stim_on = first flicker fli
     session_end    n_trials, aborted
 ``complete`` is false when ESC cut the flicker short. Before the window opens the
 script waits for a recorder to connect to the stream (skip with --no-recorder). The
-trial table is also saved to data/recordings/<subject>_<date>_trials.csv.
+trial table is also saved to data/recordings/<subject>_<date>_trials.csv, and every
+flip of every trial (cue, flicker, stim_off) to <subject>_<date>_flips.npz.
 
 --test flickers all targets once and saves the flip log to results/timing/.
+
+After the session and after --test the script says whether the flicker timing was
+good enough for a recording (stimulus.timing_problems: no dropped frames, flips locked
+to the refresh). Run --test before every session and record only if it says OK.
 
 Set the monitor to config.REFRESH_RATE in GNOME Settings -> Displays, then log out and
 back in before running. Changing the rate live (or with xrandr) can leave GNOME Shell
@@ -59,6 +64,7 @@ CUE_COLOR = (220, 30, 30)
 CUE_GAP = 16  # px between a target and its cue frame
 CUE_THICKNESS = 8  # px
 LABEL_GAP = 8  # px between the cue frame and a frequency label
+CUE, FLICKER, OFF = 0, 1, 2  # flip-log phases (CUE is the speller's gaze phase)
 
 
 class FlickerScene:
@@ -218,18 +224,24 @@ def run_frames(
     """Show ``n_frames`` refreshes of flickering (or resting) targets -> flip times.
 
     The first flip is the onset; ``on_onset(t)`` is called right after it, so its
-    marker goes out in real time. Stops early on ESC.
+    marker goes out in real time. Every flip draws the flicker sample of the refresh it
+    lands on, counted interval by interval from the onset (stimulus.refreshes_between).
+    Stops early on ESC.
     """
     flip_times = []
-    frame = 0
+    refresh = 0  # refresh the last flip landed on, counted from the onset
+    frame = 0  # sample to draw: the refresh the next flip lands on
     while frame < n_frames and not window.has_exit:
         window.dispatch_events()
         flip_times.append(show_frame(window, scene, frame if flickering else 0))
-        if len(flip_times) == 1 and on_onset is not None:
-            on_onset(flip_times[0])
-        frame = stimulus.next_frame_index(
-            flip_times[-1], flip_times[0], scene.refresh_rate
-        )
+        if len(flip_times) == 1:
+            if on_onset is not None:
+                on_onset(flip_times[0])
+        else:
+            refresh += stimulus.refreshes_between(
+                flip_times[-2], flip_times[-1], scene.refresh_rate
+            )
+        frame = refresh + 1
     return np.array(flip_times)
 
 
@@ -282,6 +294,58 @@ def check_refresh_rate(
     print(f"Warning: {message}")
 
 
+def flicker_intervals(trial_flips: list) -> np.ndarray:
+    """Flip-to-flip intervals (s) of every trial's flicker, up to its stim_off flip.
+
+    ``trial_flips`` holds (trial, cue flips, flicker flips, stim_off flip) per trial.
+    """
+    return np.concatenate(
+        [np.diff(np.r_[stim, off]) for _, _, stim, off in trial_flips]
+    )
+
+
+def print_timing_verdict(
+    intervals: np.ndarray, refresh_rate: float, windowed: bool = False
+):
+    """Say whether the flicker timing in ``intervals`` (s) is good enough to record."""
+    if windowed:
+        print("Timing not checked: --windowed timing is not valid.")
+        return
+    problems = stimulus.timing_problems(intervals, refresh_rate)
+    if problems:
+        print(
+            f"Timing NOT OK for a recording: {'; '.join(problems)}. Close other apps, "
+            "log out and back in, and check again with --test."
+        )
+    else:
+        sd_ms = 1000 * np.std(intervals)
+        print(f"Timing OK: no dropped frames, flip interval sd {sd_ms:.2f} ms.")
+
+
+def save_flip_log(path, trial_flips: list, refresh_rate: float):
+    """Save every flip of every trial to ``path`` (.npz).
+
+    ``trial_flips`` holds (trial, cue flips, flicker flips, stim_off flip) per trial.
+    Arrays, one entry per flip: flip_times (LSL time), trial, phase (CUE, FLICKER or
+    OFF); plus refresh_rate. stimulus.refresh_indices on a trial's FLICKER and OFF
+    flips gives the refresh each one landed on; the sample a flip showed is the
+    previous flip's refresh + 1 (its own refresh, unless that frame was late).
+    """
+    times, trials, phases = [], [], []
+    for trial, cue, stim, off in trial_flips:
+        for phase, flips in ((CUE, cue), (FLICKER, stim), (OFF, [off])):
+            times.extend(flips)
+            trials.extend([trial] * len(flips))
+            phases.extend([phase] * len(flips))
+    np.savez(
+        path,
+        flip_times=np.array(times),
+        trial=np.array(trials),
+        phase=np.array(phases),
+        refresh_rate=refresh_rate,
+    )
+
+
 def run_trial(
     window: pyglet.window.Window,
     scene: FlickerScene,
@@ -289,8 +353,9 @@ def run_trial(
     info: dict,
     n_cue: int,
     n_stim: int,
-) -> dict | None:
-    """Cue, flicker, then a resting flip -> trial-log row (None on ESC before onset).
+) -> tuple[dict, tuple] | None:
+    """Cue, flicker, then a resting flip -> (trial-log row, (trial, cue flips, flicker
+    flips, stim_off flip) for save_flip_log); None on ESC before onset.
 
     ``info`` holds the trial's marker fields: trial, block, target, freq.
     """
@@ -309,11 +374,12 @@ def run_trial(
         return None
     off = show_frame(window, scene, 0)
     n_dropped = int(stimulus.dropped_frames(np.r_[stim, off], scene.refresh_rate).sum())
-    complete = (
-        stimulus.next_frame_index(stim[-1], stim[0], scene.refresh_rate) >= n_stim
+    # bool(): numpy's bool is not JSON serialisable
+    complete = bool(
+        stimulus.refresh_indices(stim, scene.refresh_rate)[-1] + 1 >= n_stim
     )
     send_marker(outlet, off, "stim_off", **info, n_dropped=n_dropped, complete=complete)
-    return {
+    row = {
         **info,
         "cue": cue[0],
         "stim_on": stim[0],
@@ -321,6 +387,7 @@ def run_trial(
         "n_dropped": n_dropped,
         "complete": complete,
     }
+    return row, (info["trial"], cue, stim, off)
 
 
 def run_session(
@@ -330,15 +397,15 @@ def run_session(
     n_blocks: int,
     cue_s: float,
     stim_s: float,
-) -> list[dict]:
+) -> tuple[list[dict], list[tuple]]:
     """All blocks, with a SPACE-to-continue break before every block but the first
-    -> trial-log rows. Stops early on ESC."""
+    -> (trial-log rows, flips of every trial for save_flip_log). Stops early on ESC."""
     n_cue = int(round(cue_s * scene.refresh_rate))
     n_stim = int(round(stim_s * scene.refresh_rate))
     targets, blocks = stimulus.trial_sequence(
         len(scene.freqs), n_blocks, np.random.default_rng()
     )
-    rows = []
+    rows, trial_flips = [], []
     for block in range(n_blocks):
         if block > 0:
             wait_for_space(
@@ -358,9 +425,10 @@ def run_session(
                     "target": target,
                     "freq": scene.freqs[target],
                 }
-                row = run_trial(window, scene, outlet, info, n_cue, n_stim)
-                if row is not None:
-                    rows.append(row)
+                result = run_trial(window, scene, outlet, info, n_cue, n_stim)
+                if result is not None:
+                    rows.append(result[0])
+                    trial_flips.append(result[1])
                 if window.has_exit:
                     break
         finally:
@@ -368,7 +436,7 @@ def run_session(
         if window.has_exit:
             break
         send_marker(outlet, pylsl.local_clock(), "block_end", block=block)
-    return rows
+    return rows, trial_flips
 
 
 def calibration(
@@ -377,7 +445,7 @@ def calibration(
     outlet: pylsl.StreamOutlet,
     args: argparse.Namespace,
 ):
-    """Run the session, then close the window and save the trial table."""
+    """Run the session, then close the window and save the trial table and flip log."""
     send_marker(
         outlet,
         pylsl.local_clock(),
@@ -394,7 +462,9 @@ def calibration(
         centres_px=scene.centres.round(1).tolist(),
         size_px=round(scene.size, 1),
     )
-    rows = run_session(window, scene, outlet, args.blocks, args.cue, args.stim)
+    rows, trial_flips = run_session(
+        window, scene, outlet, args.blocks, args.cue, args.stim
+    )
     aborted = window.has_exit
     send_marker(
         outlet, pylsl.local_clock(), "session_end", n_trials=len(rows), aborted=aborted
@@ -412,12 +482,17 @@ def calibration(
         f"{trials['n_dropped'].sum()} dropped frames in "
         f"{(trials['n_dropped'] > 0).sum()} trials"
     )
-    config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    path = config.RECORDINGS_DIR / (
-        f"{args.subject}_{datetime.now():%Y%m%d_%H%M%S}_trials.csv"
+    print_timing_verdict(
+        flicker_intervals(trial_flips), scene.refresh_rate, args.windowed
     )
+    config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    stem = config.RECORDINGS_DIR / f"{args.subject}_{datetime.now():%Y%m%d_%H%M%S}"
+    path = f"{stem}_trials.csv"
     trials.to_csv(path, index=False)
     print(f"Trial table saved to {path}")
+    path = f"{stem}_flips.npz"
+    save_flip_log(path, trial_flips, scene.refresh_rate)
+    print(f"Flip log saved to {path}")
 
 
 def flicker_test(
@@ -451,6 +526,7 @@ def flicker_test(
         f"Dropped frames: {report['n_dropped']} "
         f"(in {report['n_late_flips']} late flips)"
     )
+    print_timing_verdict(np.diff(flip_times), scene.refresh_rate, args.windowed)
 
     out_dir = config.RESULTS_DIR / "timing"
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -24,7 +24,10 @@ with ESC. The backend can pause too (e.g. after a phrase).
 Start the backend (it may also start after the GUI, which waits for its state
 stream), then this script, then scripts/record.py, and press SPACE once the recorder
 runs: session_start goes out on that SPACE. The trial table is saved to
-data/recordings/<subject>_<date>_online.csv.
+data/recordings/<subject>_<date>_online.csv, and every flip of every trial (gaze,
+flicker, stim_off) to <subject>_<date>_online_flips.npz (calibration.save_flip_log).
+At the end the script says whether the flicker timing was good enough (as in
+calibration.py; run calibration.py --test before a session).
 
 --demo replaces the backend with a stand-in that cues a random target in every trial
 and selects it, to check the display and the flicker timing without EEG. Its markers
@@ -53,9 +56,12 @@ from calibration import (
     TEXT_COLOR,
     FlickerScene,
     check_refresh_rate,
+    flicker_intervals,
     open_marker_outlet,
     open_window,
+    print_timing_verdict,
     run_frames,
+    save_flip_log,
     send_marker,
     show_frame,
 )
@@ -331,6 +337,7 @@ class Session:
         self.n_feedback = int(round(args.feedback * rate))
         self.state = None  # newest state from the backend
         self.rows = []  # trial table, one row per flicker
+        self.trial_flips = []  # (trial, gaze, flicker, stim_off flips) per row
         self.aborted = False  # ESC during a block
         self.space = False  # SPACE pressed since the last check
         window.push_handlers(on_key_press=self.on_key_press)
@@ -407,7 +414,7 @@ class Session:
         cue = target if self.state["cue"] else None
         self.scene.set_cue(cue)
         on_cue = None if cue is None else lambda t: self.link.send(t, "cue", **info)
-        run_frames(self.window, self.scene, self.n_gaze, False, on_cue)
+        gaze = run_frames(self.window, self.scene, self.n_gaze, False, on_cue)
         self.scene.set_cue(None)
         if self.window.has_exit:
             return None
@@ -426,8 +433,9 @@ class Session:
         off = show_frame(self.window, self.scene, 0)
         refresh_rate = self.scene.refresh_rate
         n_dropped = int(stimulus.dropped_frames(np.r_[stim, off], refresh_rate).sum())
-        complete = (
-            stimulus.next_frame_index(stim[-1], stim[0], refresh_rate) >= self.n_stim
+        # bool(): numpy's bool is not JSON serialisable
+        complete = bool(
+            stimulus.refresh_indices(stim, refresh_rate)[-1] + 1 >= self.n_stim
         )
         self.link.send(off, "stim_off", **info, n_dropped=n_dropped, complete=complete)
         row = {
@@ -442,6 +450,7 @@ class Session:
             "text": None,
         }
         self.rows.append(row)
+        self.trial_flips.append((info["trial"], gaze, stim, off))
         if not complete:
             return None
 
@@ -551,7 +560,7 @@ class Session:
         self.save()
 
     def save(self):
-        """Print a summary and write the trial table to data/recordings/."""
+        """Print a summary and write the trial table and flip log to data/recordings/."""
         if not self.rows:
             return
         trials = pd.DataFrame(self.rows)
@@ -567,12 +576,20 @@ class Session:
                 f"Answer after stim_off: median {delay.median():.0f} ms, "
                 f"max {delay.max():.0f} ms"
             )
-        config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
-        path = config.RECORDINGS_DIR / (
-            f"{self.args.subject}_{datetime.now():%Y%m%d_%H%M%S}_online.csv"
+        refresh_rate = self.scene.refresh_rate
+        print_timing_verdict(
+            flicker_intervals(self.trial_flips), refresh_rate, self.args.windowed
         )
+        config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        stem = config.RECORDINGS_DIR / (
+            f"{self.args.subject}_{datetime.now():%Y%m%d_%H%M%S}_online"
+        )
+        path = f"{stem}.csv"
         trials.to_csv(path, index=False)
         print(f"Trial table saved to {path}")
+        path = f"{stem}_flips.npz"
+        save_flip_log(path, self.trial_flips, refresh_rate)
+        print(f"Flip log saved to {path}")
 
 
 def find_backend() -> pylsl.StreamInlet | None:

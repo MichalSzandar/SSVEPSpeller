@@ -8,7 +8,7 @@ from sklearn.base import clone
 from sklearn.cross_decomposition import CCA as SklearnCCA
 
 from ssvep import config
-from ssvep.cca import CCA, canonical_correlation, reference_signals
+from ssvep.cca import CCA, NormalizedCCA, canonical_correlation, reference_signals
 from ssvep.datasets import make_synthetic
 from ssvep.evaluation import leave_one_block_out
 from ssvep.preprocessing import bandpass, crop, filter_bank, filter_bank_weights
@@ -235,6 +235,93 @@ def test_fbcca_resists_alpha_rhythm():
     acc_fbcca = CCA(freqs, fs).fit(X_fb, y).score(X_fb, y)
     assert acc_fbcca > 0.9, f"FBCCA {acc_fbcca:.2f}"
     assert acc_fbcca - acc_cca > 0.3, f"CCA {acc_cca:.2f}, FBCCA {acc_fbcca:.2f}"
+
+
+# --- NormalizedCCA -------------------------------------------------------------
+
+
+def test_normalized_cca_can_be_cloned():
+    """clone() keeps the CCA parameters."""
+    clf = clone(NormalizedCCA(freqs, fs, n_harmonics=3, fb_a=1.0))
+    assert (clf.n_harmonics, clf.fb_a) == (3, 1.0)
+
+
+def test_normalized_cca_fit_stores_score_statistics(synthetic_easy):
+    """fit() returns self, sets classes_, and stores the per-target mean and std of the plain
+    CCA scores over the training trials, each of shape (n_targets,)."""
+    X, y, _ = synthetic_easy
+    X = prepare(X, 1.0)
+    clf = NormalizedCCA(freqs, fs)
+    assert clf.fit(X, y) is clf
+    assert np.array_equal(clf.classes_, np.arange(len(freqs)))
+    plain = CCA(freqs, fs).fit(X, y).decision_function(X)
+    np.testing.assert_allclose(clf.score_mean_, plain.mean(axis=0), rtol=1e-5)
+    np.testing.assert_allclose(clf.score_std_, plain.std(axis=0), rtol=1e-5)
+
+
+@pytest.mark.parametrize("filter_bank_input", [False, True])
+def test_normalized_cca_scores_test_trials_with_training_statistics(
+    synthetic_easy, filter_bank_input
+):
+    """Fit on blocks 0-4, score block 5: (plain score - training mean) / training std, per
+    target; predict() is the argmax of those scores. Works for CCA and FBCCA input."""
+    X, y, blocks = synthetic_easy
+    X = prepare_fb(X, 1.0) if filter_bank_input else prepare(X, 1.0)
+    train, test = blocks != 5, blocks == 5
+    clf = NormalizedCCA(freqs, fs).fit(X[train], y[train])
+    plain = CCA(freqs, fs).fit(X[train], y[train])
+    train_scores = plain.decision_function(X[train])
+    expected = (plain.decision_function(X[test]) - train_scores.mean(axis=0)) / (
+        train_scores.std(axis=0)
+    )
+    scores = clf.decision_function(X[test])
+    assert scores.shape == (test.sum(), len(freqs))
+    np.testing.assert_allclose(scores, expected, rtol=1e-4, atol=1e-5)
+    assert np.array_equal(clf.predict(X[test]), np.argmax(expected, axis=1))
+
+
+def test_normalized_cca_training_scores_are_standardised(synthetic_easy):
+    """On the trials it was fitted on, every target's score has mean ~0 and std ~1."""
+    X, y, _ = synthetic_easy
+    X = prepare(X, 1.0)
+    scores = NormalizedCCA(freqs, fs).fit(X, y).decision_function(X)
+    np.testing.assert_allclose(scores.mean(axis=0), 0, atol=1e-5)
+    np.testing.assert_allclose(scores.std(axis=0), 1, atol=1e-4)
+
+
+def test_normalized_cca_single_training_trial_gives_finite_scores(synthetic_easy):
+    """One training trial has std 0 for every target: scores are still finite (no nan/inf)."""
+    X, y, _ = synthetic_easy
+    X = prepare(X, 1.0)
+    clf = NormalizedCCA(freqs, fs).fit(X[:1], y[:1])
+    assert np.isfinite(clf.decision_function(X)).all()
+
+
+def test_normalized_cca_easy_data(synthetic_easy):
+    """Leave-one-block-out accuracy > 0.95 at 1 s, single band and filter bank."""
+    X, y, blocks = synthetic_easy
+    for X_in in (prepare(X, 1.0), prepare_fb(X, 1.0)):
+        assert leave_one_block_out(NormalizedCCA(freqs, fs), X_in, y, blocks) > 0.95
+
+
+def test_normalized_cca_noise_only_is_near_chance(synthetic_noise_only):
+    """Leave-one-block-out accuracy well below 0.6 (chance is 1/6)."""
+    X, y, blocks = synthetic_noise_only
+    assert (
+        leave_one_block_out(NormalizedCCA(freqs, fs), prepare(X, 1.0), y, blocks) < 0.6
+    )
+
+
+def test_normalized_cca_removes_the_bias_towards_an_alpha_target():
+    """A strong ~10.8 Hz alpha rhythm in every trial makes plain CCA pick the 10.8 Hz target
+    far too often. Normalising each target's score with the training trials removes that bias:
+    leave-one-block-out accuracy > 0.9 and > 0.3 above plain CCA (1 s, single band)."""
+    X, y, blocks = make_synthetic(snr_db=-10.0, n_blocks=10, seed=0)
+    X = prepare(add_alpha(X, amplitude=2.0, seed=0), 1.0)
+    acc_cca = leave_one_block_out(CCA(freqs, fs), X, y, blocks)
+    acc_norm = leave_one_block_out(NormalizedCCA(freqs, fs), X, y, blocks)
+    assert acc_norm > 0.9, f"NormalizedCCA {acc_norm:.2f}"
+    assert acc_norm - acc_cca > 0.3, f"CCA {acc_cca:.2f}, NormalizedCCA {acc_norm:.2f}"
 
 
 # --- trca_spatial_filter -------------------------------------------------------

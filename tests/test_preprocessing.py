@@ -1,16 +1,24 @@
 """Tests for ssvep.preprocessing."""
 
 import pytest
+from sklearn.base import BaseEstimator, ClassifierMixin, clone
 
 from ssvep import config
+from ssvep.datasets import make_synthetic
+from ssvep.evaluation import leave_one_block_out
 from ssvep.preprocessing import (
+    RejectArtifacts,
+    bad_channel_mask,
+    bad_trial_mask,
     bandpass,
     chebyshev_bandpass,
     crop,
     filter_bank,
     filter_bank_weights,
     notch,
+    trial_ptp_ratio,
 )
+from ssvep.trca import TRCA
 import numpy as np
 
 n_samples = 1000
@@ -191,3 +199,162 @@ def test_crop_length():
     X_cropped = crop(X, fs=fs, start=1.0, duration=2.0)
     assert X_cropped.shape[-1] == 500
     assert np.all(X_cropped == np.arange(250, 750)[None, None, :])
+
+
+# --- artifact rejection ------------------------------------------------------------
+
+
+def noise_trials(n_trials=18, n_channels=4, n_samples=500, seed=0):
+    """(n_trials, n_channels, n_samples) Gaussian noise, sd 1: peak-to-peak ~6 per trial."""
+    return np.random.default_rng(seed).normal(size=(n_trials, n_channels, n_samples))
+
+
+def test_bad_trial_mask_flags_only_the_trial_with_a_spike():
+    """A 50-unit spike on one channel of trial 7 (noise sd 1): only trial 7 is flagged."""
+    X = noise_trials()
+    X[7, 2, 100] += 50
+    assert np.flatnonzero(bad_trial_mask(X, max_ratio=5.0)).tolist() == [7]
+
+
+def test_bad_trial_mask_is_relative_to_each_channel():
+    """Scaling all the data, or one whole channel, does not change the mask: the threshold
+    is relative to each channel's usual swing, so a noisy channel is not a bad trial."""
+    X = noise_trials()
+    X[7, 2, 100] += 50
+    expected = bad_trial_mask(X)
+    assert np.array_equal(bad_trial_mask(1000 * X), expected)
+    X[:, 0] *= 20
+    assert np.array_equal(bad_trial_mask(X), expected)
+
+
+def test_trial_ptp_ratio_is_about_one_for_clean_trials_and_finite_for_a_flat_channel():
+    """Clean noise: every ratio between 1/2 and 2. A channel that is 0 everywhere gives
+    no nan or inf and flags no trial."""
+    X = noise_trials()
+    X[:, 1] = 0.0
+    ratio = trial_ptp_ratio(X)
+    assert ratio.shape == (18,)
+    assert np.isfinite(ratio).all()
+    assert (ratio > 0.5).all() and (ratio < 2.0).all()
+    assert not bad_trial_mask(X).any()
+
+
+def test_bad_channel_mask_flags_noisy_and_flat_channels():
+    """8 channels with sd 1: the one with sd 5 and the one with sd 0.1 are flagged, the one
+    with sd 2 (inside the 3x ratio) is not."""
+    X = noise_trials(n_channels=8)
+    X[:, 2] *= 5
+    X[:, 5] *= 0.1
+    X[:, 6] *= 2
+    assert np.flatnonzero(bad_channel_mask(X, max_ratio=3.0)).tolist() == [2, 5]
+
+
+def test_bad_channel_mask_ignores_a_few_artifact_trials():
+    """100x larger signal in 3 of 18 trials of one channel does not make it a bad channel
+    (the channel level is a median over trials)."""
+    X = noise_trials(n_channels=8)
+    X[:3, 4] *= 100
+    assert not bad_channel_mask(X).any()
+
+
+class FitRecorder(BaseEstimator, ClassifierMixin):
+    """Stand-in classifier: remembers what it was fitted on and what it classified."""
+
+    def fit(self, X, y):
+        self.X_fit_, self.y_fit_ = X, y
+        self.classes_ = np.unique(y)
+        return self
+
+    def decision_function(self, X):
+        self.X_scored_ = X
+        return np.zeros((len(X), len(self.classes_)))
+
+    def predict(self, X):
+        self.X_predicted_ = X
+        return np.full(len(X), self.classes_[0])
+
+
+def labelled_trials(seed=0):
+    """(X, y): classifier input (18, 1, 4, 500) of noise, 3 classes x 6 trials."""
+    return noise_trials(seed=seed)[:, None], np.repeat([0, 1, 2], 6)
+
+
+def test_reject_artifacts_fits_without_the_bad_trial():
+    """A spike in training trial 4: the wrapped classifier is fitted on the other 17 trials;
+    fit returns self and copies classes_."""
+    X, y = labelled_trials()
+    X[4, 0, 1, 50] += 50
+    clf = RejectArtifacts(FitRecorder())
+    assert clf.fit(X, y) is clf
+    assert np.flatnonzero(~clf.trials_kept_).tolist() == [4]
+    assert clf.estimator_.X_fit_.shape == (17, 1, 4, 500)
+    assert np.array_equal(clf.estimator_.y_fit_, np.delete(y, 4))
+    assert np.array_equal(clf.classes_, [0, 1, 2])
+
+
+def test_reject_artifacts_classifies_every_test_trial():
+    """Test trials are never rejected: predict and decision_function return one entry per
+    trial, also for a test trial with an artifact."""
+    X, y = labelled_trials()
+    X_test, _ = labelled_trials(seed=1)
+    X_test[0, 0, 0, 10] += 500
+    clf = RejectArtifacts(FitRecorder()).fit(X, y)
+    assert clf.predict(X_test).shape == (18,)
+    assert clf.decision_function(X_test).shape == (18, 3)
+
+
+def test_reject_artifacts_keeps_the_least_bad_trials_of_a_class():
+    """5 of the 6 trials of class 1 have spikes of growing size: with min_trials=2 the clean
+    trial and the one with the smallest spike stay, so TRCA still gets 2 trials."""
+    X, y = labelled_trials()
+    for t, size in zip(range(7, 12), [40, 50, 60, 70, 80]):
+        X[t, 0, 0, 10] += size
+    clf = RejectArtifacts(FitRecorder(), min_trials=2).fit(X, y)
+    assert np.flatnonzero(clf.trials_kept_ & (y == 1)).tolist() == [6, 7]
+    assert clf.trials_kept_[y != 1].all()
+
+
+def test_reject_artifacts_drops_a_noisy_channel_in_fit_and_at_test_time():
+    """Channel 3 is 10x noisier: the wrapped classifier sees channels 0-2 only, both when
+    fitted and when it classifies new trials."""
+    X, y = labelled_trials()
+    X[:, :, 3] *= 10
+    clf = RejectArtifacts(FitRecorder()).fit(X, y)
+    assert clf.channels_.tolist() == [0, 1, 2]
+    assert clf.estimator_.X_fit_.shape[2] == 3
+    clf.predict(X)
+    clf.decision_function(X)
+    assert clf.estimator_.X_predicted_.shape[2] == 3
+    assert clf.estimator_.X_scored_.shape[2] == 3
+
+
+@pytest.mark.parametrize("off", [None, 0])
+def test_reject_artifacts_switched_off_fits_on_everything(off):
+    """trial_ratio and channel_ratio None (or 0): every trial and channel is used."""
+    X, y = labelled_trials()
+    X[4, 0, 1, 50] += 50
+    X[:, :, 3] *= 10
+    clf = RejectArtifacts(FitRecorder(), trial_ratio=off, channel_ratio=off).fit(X, y)
+    assert clf.trials_kept_.all()
+    assert clf.channels_.tolist() == [0, 1, 2, 3]
+    assert clf.estimator_.X_fit_.shape == X.shape
+
+
+def test_reject_artifacts_can_be_cloned():
+    """clone() keeps the thresholds and the (unfitted) wrapped classifier's parameters."""
+    clf = clone(
+        RejectArtifacts(TRCA(ensemble=True), trial_ratio=4.0, channel_ratio=2.5)
+    )
+    assert (clf.trial_ratio, clf.channel_ratio) == (4.0, 2.5)
+    assert isinstance(clf.estimator, TRCA) and clf.estimator.ensemble
+
+
+def test_reject_artifacts_changes_nothing_on_clean_data():
+    """Clean synthetic SSVEP (1 s, single band): eTRCA with and without the wrapper gives the
+    same leave-one-block-out accuracy, > 0.95."""
+    X, y, blocks = make_synthetic(snr_db=0.0, seed=0)
+    X = crop(bandpass(X, fs, *config.BANDPASS)[:, None], fs, start=0.5, duration=1.0)
+    plain = leave_one_block_out(TRCA(ensemble=True), X, y, blocks)
+    wrapped = leave_one_block_out(RejectArtifacts(TRCA(ensemble=True)), X, y, blocks)
+    assert wrapped == plain
+    assert wrapped > 0.95

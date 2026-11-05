@@ -19,8 +19,7 @@ BENCHMARK_CHANNELS = ["Pz", "PO5", "PO3", "POz", "PO4", "PO6", "O1", "Oz", "O2"]
 EEG_FS = 250  # Hz, BrainAccess
 LINE_FREQ = 50.0  # Hz, mains frequency
 REFRESH_RATE = 120  # Hz, monitor refresh rate
-# TODO: cap electrodes over the occipital area
-CAP_CHANNELS: list[str] = []
+CAP_CHANNELS: list[str] = ["P7", "P3", "Pz", "P4", "P8", "O1", "Oz", "O2"]
 
 # --- Stimulus ------------------------------------------------------------------
 TARGET_FREQS = [8.0, 9.4, 10.8, 12.2, 13.6, 15.0]  # Hz, all on the Benchmark grid
@@ -31,7 +30,9 @@ TARGET_PHASES = [0.0] * len(TARGET_FREQS)  # rad, one per target (JFPM)
 TARGET_SLOTS = [0, 3, 1, 4, 2, 5]
 
 # --- Calibration protocol --------------------------------------------------------
-N_BLOCKS = 6  # every block shows each target once, in random order
+# Every block shows each target once, in random order. TRCA learns its templates from
+# these trials, so more blocks help it most on noisy data (10 blocks: ~7 min).
+N_BLOCKS = 10
 CUE_DURATION = 2.0  # s, red frame on the next target
 STIM_DURATION = 5.0  # s, flicker per trial
 MARKER_STREAM = "SSVEP-Markers"  # LSL stream with the GUI's JSON event markers
@@ -47,3 +48,9 @@ N_HARMONICS = 5  # harmonics in the CCA reference signals
 N_SUBBANDS = 5  # filter-bank size (Chen 2015)
 FB_A, FB_B = 1.25, 0.25  # filter-bank weight parameters (Chen 2015)
 GAZE_SHIFT = 0.5  # s, added to the window length when computing ITR
+
+# --- Artifact rejection (training trials only, see preprocessing.RejectArtifacts) ----
+# A trial is bad if a channel's peak-to-peak is > 5x its median over trials; a channel
+# is bad if its sd is > 3x, or < 1/3 of, the typical channel's.
+MAX_TRIAL_PTP_RATIO = 5.0
+MAX_CHANNEL_SD_RATIO = 3.0

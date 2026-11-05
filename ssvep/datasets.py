@@ -6,6 +6,9 @@ Every loader returns the same triple:
              pre-stimulus part (crop after filtering, see preprocessing.py)
     y      : (n_trials,)  target index 0..n_targets-1 (index into `freqs`)
     blocks : (n_trials,)  block/run index, used for leave-one-block-out CV
+
+For an own recording, `freqs` are the frequencies it was recorded with
+(recording_freqs), which need not be today's config.TARGET_FREQS.
 """
 
 import json
@@ -155,6 +158,21 @@ def load_recording(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         raise ValueError(f"No complete trials in {path}")
     X_epochs = np.stack(X_epochs, axis=0)  # (trials, channels, samples)
     return X_epochs, np.array(y), np.array(blocks)
+
+
+def recording_freqs(path: Path) -> list[float]:
+    """Target frequencies of an own recording, from its ``session_start`` marker.
+
+    The ``y`` of load_recording indexes this list. Use it rather than
+    config.TARGET_FREQS, which may have changed since the recording was made. Raises
+    ValueError if the recording has no session_start marker with ``freqs``.
+    """
+    with np.load(path) as npz:
+        markers = [json.loads(m) for m in np.asarray(npz["markers"])]
+    for m in markers:
+        if m["event"] == "session_start" and "freqs" in m:
+            return [float(f) for f in m["freqs"]]
+    raise ValueError(f"{path} has no session_start marker with freqs")
 
 
 def make_synthetic(

@@ -143,12 +143,16 @@ def main():
     samples, timestamps = record(inlet, args.seconds)
     print_recorded_info(samples, timestamps, ch_labels)
 
+    index_list = [ch_labels.index(c) for c in config.CAP_CHANNELS if c in ch_labels]
+    samples = samples[:, index_list]
+
     if args.alpha:
         print(
             "\nAlpha test: open your eyes for 10 seconds, then close them for 10 seconds."
         )
         input("Press Enter to start...")
         samples, timestamps = record(inlet, 10.0)
+        samples = samples[:, index_list]
         fs_open, pxx_open = welch(
             samples, inlet.info().nominal_srate(), nperseg=256, axis=0
         )
@@ -157,6 +161,7 @@ def main():
         print("Now close your eyes for 10 seconds.")
         input("Press Enter to continue...")
         samples, timestamps = record(inlet, 10.0)
+        samples = samples[:, index_list]
         fs_closed, pxx_closed = welch(
             samples, inlet.info().nominal_srate(), nperseg=256, axis=0
         )

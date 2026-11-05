@@ -11,8 +11,10 @@ from ssvep.stimulus import (
     dropped_frames,
     gray_levels,
     luminance,
-    next_frame_index,
+    refresh_indices,
+    refreshes_between,
     ring_layout,
+    timing_problems,
     timing_report,
     trial_sequence,
 )
@@ -63,29 +65,108 @@ def test_gray_levels():
     assert np.issubdtype(levels.dtype, np.integer)
 
 
-def test_next_frame_index_on_time_and_jitter():
-    """Flips on time give consecutive frames; jitter below half a frame changes nothing."""
-    onset = 1000.0
-    assert next_frame_index(onset, onset, R) == 1
-    assert next_frame_index(onset + 5 * PERIOD, onset, R) == 6
-    assert next_frame_index(onset + 5 * PERIOD + 0.003, onset, R) == 6
-    assert next_frame_index(onset + 5 * PERIOD - 0.003, onset, R) == 6
+def test_refreshes_between():
+    """Whole refresh periods from one flip to the next, rounded: jitter below half a
+    period changes nothing, and two flips are always at least one refresh apart."""
+    t = 1000.0
+    assert refreshes_between(t, t + PERIOD, R) == 1
+    assert refreshes_between(t, t + PERIOD + 0.003, R) == 1
+    assert refreshes_between(t, t + PERIOD - 0.003, R) == 1
+    assert refreshes_between(t, t + 2 * PERIOD, R) == 2
+    assert refreshes_between(t, t + 3 * PERIOD - 0.002, R) == 3
+    assert refreshes_between(t, t + 0.1 * PERIOD, R) == 1
 
 
-def test_next_frame_index_keeps_phase_after_dropped_frame():
-    """Simulated flip loop with one dropped refresh: after the drop, the frame shown at
-    every flip matches the wall-clock frame, so the flicker phase is not shifted."""
+def test_refresh_indices():
+    """0 for the first flip, then the running sum of refreshes_between; this recovers the
+    refreshes of a jittery log with missed refreshes. Empty and one-flip logs work."""
+    rng = np.random.default_rng(2)
+    refreshes = np.r_[0:20, 22:30, 31:40]  # refreshes 20, 21 and 30 missed
+    flip_times = 5.0 + refreshes * PERIOD + rng.normal(0, 0.0005, len(refreshes))
+    steps = [refreshes_between(a, b, R) for a, b in itertools.pairwise(flip_times)]
+
+    indices = refresh_indices(flip_times, R)
+    assert indices.tolist() == np.r_[0, np.cumsum(steps)].tolist()
+    assert indices.tolist() == refreshes.tolist()
+    assert refresh_indices(np.array([]), R).tolist() == []
+    assert refresh_indices(np.array([5.0]), R).tolist() == [0]
+
+
+def drawn_samples(flip_times):
+    """The flicker sample drawn for each flip by the flip loop's bookkeeping (as in
+    scripts/calibration.py, run_frames), replayed on the given flip times."""
+    shown = []
+    refresh = frame = 0
+    for j in range(len(flip_times)):
+        shown.append(frame)
+        if j > 0:
+            refresh += refreshes_between(flip_times[j - 1], flip_times[j], R)
+        frame = refresh + 1
+    return shown
+
+
+@pytest.mark.parametrize("seed", range(5))
+@pytest.mark.parametrize("onset_error_ms", [-3.9, -3.5, 0.0, 3.5])
+def test_flip_loop_does_not_stutter_after_an_off_grid_onset(onset_error_ms, seed):
+    """5 s of flicker without dropped frames, timestamp noise like a clean run on the
+    thesis laptop (sd 0.2 ms, at most 0.9 ms), and the onset flip's timestamp a few ms
+    off its refresh (once seen 3.2-3.9 ms early). After the onset no sample is repeated
+    or skipped: flip j shows sample j, or j + 1 for every flip from the second interval
+    on if the onset error made the first interval round up to two refreshes."""
+    rng = np.random.default_rng(seed)
+    refreshes = np.arange(600)
+    noise = np.clip(rng.normal(0, 0.0002, len(refreshes)), -0.0009, 0.0009)
+    flip_times = 1000.0 + refreshes * PERIOD + noise
+    flip_times[0] = 1000.0 + onset_error_ms / 1000
+
+    shift = np.array(drawn_samples(flip_times)) - refreshes
+    assert shift[0] == shift[1] == 0
+    assert np.all(shift[2:] == shift[2]) and shift[2] in (0, 1)
+
+
+def test_flip_loop_keeps_phase_after_dropped_frame():
+    """One refresh missed: the late flip shows the sample drawn for the missed refresh,
+    and every later flip its own refresh's sample, so the phase is not shifted."""
     rng = np.random.default_rng(0)
     refreshes = np.r_[np.arange(0, 50), np.arange(51, 100)]  # refresh 50 missed
     flip_times = 1000.0 + refreshes * PERIOD + rng.uniform(0, 0.002, len(refreshes))
 
-    shown = [0]
-    for t in flip_times[:-1]:
-        shown.append(next_frame_index(t, flip_times[0], R))
-
     expected = refreshes.copy()
     expected[50] = 50  # drawn for refresh 50, but displayed one refresh late
-    assert shown == expected.tolist()
+    assert drawn_samples(flip_times) == expected.tolist()
+
+
+def test_flip_loop_does_not_skip_samples_on_a_slightly_slow_display():
+    """30 s of flicker on a display refreshing at 119.9 Hz instead of 120 Hz: every flip
+    shows the next sample, none is skipped or repeated."""
+    flip_times = 1000.0 + np.arange(3600) / 119.9
+    assert drawn_samples(flip_times) == list(range(3600))
+
+
+def test_timing_problems_clean_run():
+    """Intervals of one refresh with 0.1 ms jitter: no problems."""
+    rng = np.random.default_rng(4)
+    assert timing_problems(PERIOD + rng.normal(0, 0.0001, 2000), R) == []
+
+
+def test_timing_problems_dropped_frames():
+    """Intervals of 2 refreshes count as dropped frames ('1 dropped frame', then
+    '3 dropped frames' once 2 more intervals of 2 refreshes are added)."""
+    intervals = np.full(2000, PERIOD)
+    intervals[10] = 2 * PERIOD
+    assert timing_problems(intervals, R) == ["1 dropped frame"]
+    intervals[20:22] = 2 * PERIOD
+    assert timing_problems(intervals, R)[0] == "3 dropped frames"
+
+
+def test_timing_problems_scattered_flips():
+    """Intervals scattered by +-3 ms (sd ~1.7 ms) but none long enough to be a dropped
+    frame: one problem, about the sd; with a 2 ms limit, none."""
+    rng = np.random.default_rng(5)
+    intervals = PERIOD + rng.uniform(-0.003, 0.003, 2000)
+    problems = timing_problems(intervals, R)
+    assert len(problems) == 1 and "sd" in problems[0]
+    assert timing_problems(intervals, R, max_sd_ms=2.0) == []
 
 
 def test_trial_sequence_balanced_blocks():

@@ -7,8 +7,11 @@ stimulus onset, target k is drawn with luminance
 
 so any frequency below R/2 can be shown, not only divisors of R.
 
-The frame index i is taken from the flip timestamps, not from a frame counter, so a
-dropped frame skips one sample instead of shifting the phase of the rest of the trial.
+The frame index i counts refreshes since the onset flip, from the flip timestamps:
+every flip-to-flip interval is rounded to whole refreshes (at least one). A dropped
+frame then skips one sample instead of shifting the phase of the rest of the trial,
+and an error in one timestamp (e.g. an onset flip that returns before its refresh)
+only affects its own interval, not the frame chosen for every later flip.
 """
 
 import numpy as np
@@ -33,9 +36,23 @@ def gray_levels(lum: np.ndarray) -> np.ndarray:
     return np.round(255 * np.clip(lum, 0.0, 1.0)).astype(int)
 
 
-def next_frame_index(last_flip: float, onset: float, refresh_rate: float) -> int:
-    """Index of the frame shown on the refresh after ``last_flip`` (frame 0 at ``onset``)."""
-    return int(round((last_flip - onset) * refresh_rate)) + 1
+def refreshes_between(earlier: float, later: float, refresh_rate: float) -> int:
+    """Refreshes from one flip to the next: the interval in refresh periods, rounded,
+    at least 1."""
+    return max(1, int(round((later - earlier) * refresh_rate)))
+
+
+def refresh_indices(flip_times: np.ndarray, refresh_rate: float) -> np.ndarray:
+    """Refresh each flip was shown on, counted from the first flip (0) -> (n_flips,) ints.
+
+    Same rule as refreshes_between, interval by interval, so the count does not depend
+    on how exactly the first flip was timestamped.
+    """
+    flip_times = np.asarray(flip_times, dtype=float)
+    if len(flip_times) == 0:
+        return np.zeros(0, dtype=int)
+    steps = np.maximum(np.round(np.diff(flip_times) * refresh_rate).astype(int), 1)
+    return np.r_[0, np.cumsum(steps)]
 
 
 def ring_layout(
@@ -141,3 +158,26 @@ def timing_report(flip_times: np.ndarray, refresh_rate: float) -> dict:
         "n_dropped": int(np.sum(dropped)),
         "n_late_flips": int(np.count_nonzero(dropped)),
     }
+
+
+def timing_problems(
+    intervals: np.ndarray, refresh_rate: float, max_sd_ms: float = 0.3
+) -> list[str]:
+    """Why flicker timing is not good enough for a recording -> [] if it is.
+
+    ``intervals`` are flip-to-flip times (s) while flickering, possibly from several
+    trials. Problems: dropped frames, and an interval sd above ``max_sd_ms``, which
+    means the flips are not locked to the refresh (on the thesis laptop: ~0.14 ms in
+    clean runs, 1-1.8 ms in unstable ones).
+    """
+    intervals = np.asarray(intervals, dtype=float)
+    problems = []
+    n_dropped = int(
+        dropped_frames(np.r_[0.0, np.cumsum(intervals)], refresh_rate).sum()
+    )
+    if n_dropped:
+        problems.append(f"{n_dropped} dropped frame{'s' if n_dropped > 1 else ''}")
+    sd_ms = 1000 * np.std(intervals)
+    if sd_ms > max_sd_ms:
+        problems.append(f"flip interval sd {sd_ms:.2f} ms (limit {max_sd_ms:g} ms)")
+    return problems

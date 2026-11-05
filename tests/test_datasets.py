@@ -12,6 +12,7 @@ from ssvep.datasets import (
     load_benchmark,
     load_recording,
     make_synthetic,
+    recording_freqs,
 )
 
 needs_benchmark = pytest.mark.skipif(
@@ -205,3 +206,23 @@ def test_load_recording_missing_cap_channel_raises(tmp_path, monkeypatch):
     write_recording(tmp_path / "rec.npz")
     with pytest.raises(ValueError):
         load_recording(tmp_path / "rec.npz")
+
+
+# --- recording_freqs ----------------------------------------------------------------------
+
+
+def test_recording_freqs_reads_the_session_start_marker(tmp_path):
+    """The freqs of the session_start marker, as floats (the file was made with [8, 10] Hz,
+    not config.TARGET_FREQS)."""
+    write_recording(tmp_path / "rec.npz")
+    freqs = recording_freqs(tmp_path / "rec.npz")
+    assert freqs == [8.0, 10.0]
+    assert all(isinstance(f, float) for f in freqs)
+
+
+def test_recording_freqs_without_session_start_raises(tmp_path):
+    """A recording without a session_start marker raises ValueError."""
+    markers = np.array([json.dumps({"event": "stim_on", "trial": 0})], dtype=str)
+    np.savez_compressed(tmp_path / "rec.npz", markers=markers)
+    with pytest.raises(ValueError):
+        recording_freqs(tmp_path / "rec.npz")
