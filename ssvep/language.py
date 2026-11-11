@@ -159,10 +159,10 @@ class CausalLMScorer:
         """Load the tokenizer and the model (downloaded on first use, then cached) and
         put the model in evaluation mode. Only the last ``max_context_words`` words of
         the context are used."""
-        from transformers import (
+        from transformers import (  # pylint: disable=import-error
             AutoModelForCausalLM,
             AutoTokenizer,
-        )  # pylint: disable=import-error
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -190,22 +190,61 @@ class CausalLMScorer:
             context_words = context_words[-self.max_context_words :]
         context = " ".join(context_words)
 
-        scores = []
+        # Token ids: the context once (it is the same for every word), then each
+        # word's own tokens
+        context_ids = [self.tokenizer.bos_token_id] + self.tokenizer.encode(
+            model_text(context)  # "I live in new"
+        )
+        word_ids = []
         for word in words:
             text = model_text(context + " " + word) if context else model_text(word)
-            context_text = text[: len(context)]  # "I live in new"
-            word_text = text[len(context) :]  # " york", or "The" with no context
-            context_ids = [self.tokenizer.bos_token_id] + self.tokenizer.encode(
-                context_text
+            word_text = text[len(context) :]  # " york", or "York" with no context
+            word_ids.append(self.tokenizer.encode(word_text))
+
+        with torch.inference_mode():
+            # 1. Read the context once. use_cache=True keeps the model's memory of it
+            #    (past_key_values); logits_to_keep=1 computes the next-token scores
+            #    only after the last context token, the only ones needed here.
+            out = self.model(
+                torch.tensor([context_ids]), use_cache=True, logits_to_keep=1
             )
-            word_ids = self.tokenizer.encode(word_text)
-            input_ids = torch.tensor([context_ids + word_ids])
-            # -100 = ignored by the loss, so only the word's own tokens are scored
-            labels = torch.tensor([[-100] * len(context_ids) + word_ids])
-            with torch.no_grad():
-                outputs = self.model(input_ids=input_ids, labels=labels)
-                loss = outputs.loss.item()  # mean over the word's tokens
-            scores.append(-loss * len(word_ids))  # sum of their log-probabilities
+            after_context = torch.log_softmax(out.logits[0, -1], dim=-1)
+            # Every word's first token: straight from what follows the context.
+            # For one-token words (most common words) that is the whole score.
+            scores = [after_context[ids[0]].item() for ids in word_ids]
+
+            # 2. The other tokens of the multi-token words, in one batch: one row per
+            #    such word (the cost grows with rows x length, so one-token words stay
+            #    out), each row continuing from its own copy of the context memory.
+            #    Input = every token but the last, padded with 0 on the right: a
+            #    position only sees what is before it, so padding never changes a real
+            #    token's score.
+            multi = [i for i, ids in enumerate(word_ids) if len(ids) > 1]
+            if multi:
+                longest = max(len(word_ids[i]) for i in multi)
+                inputs = torch.zeros((len(multi), longest - 1), dtype=torch.long)
+                for row, i in enumerate(multi):
+                    inputs[row, : len(word_ids[i]) - 1] = torch.tensor(word_ids[i][:-1])
+                past = out.past_key_values
+                past.batch_repeat_interleave(len(multi))  # in place: one copy per row
+                # The network body, then the output layer (one score per vocabulary
+                # token, ~half the cost) only at the real positions, not the padding
+                hidden = self.model.base_model(
+                    inputs, past_key_values=past
+                ).last_hidden_state
+                real = torch.zeros(inputs.shape, dtype=torch.bool)
+                for row, i in enumerate(multi):
+                    real[row, : len(word_ids[i]) - 1] = True
+                output_layer = self.model.get_output_embeddings()
+                log_probs = torch.log_softmax(output_layer(hidden[real]), dim=-1)
+                # hidden[real] lists the real positions row by row, left to right.
+                # Position j of a word is what follows its token j, so its token
+                # j + 1 is read there: the "p - 1" rule.
+                k = 0  # index into log_probs
+                for i in multi:
+                    for j in range(1, len(word_ids[i])):
+                        scores[i] += log_probs[k, word_ids[i][j]].item()
+                        k += 1
 
         return scores
 
