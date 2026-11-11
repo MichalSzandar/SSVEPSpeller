@@ -428,7 +428,8 @@ def test_rows_log_every_answered_trial():
     assert [row["target"] for row in rows] == [0, 4]
     assert [row["selected"] for row in rows] == [0, 4]
     for row in rows:
-        assert {"block", "item", "text", "classify_ms"} <= set(row)
+        assert {"block", "item", "text", "classify_ms", "select_ms"} <= set(row)
+        assert row["select_ms"] >= 0
         scores = [row[f"score_{k}"] for k in range(N_TARGETS)]
         assert np.argmax(scores) == row["selected"]
 
@@ -612,3 +613,57 @@ def test_main_saves_the_log_on_ctrl_c(tmp_path, monkeypatch):
     online.main(main_args(tmp_path / "calibration.npz"))
     (log,) = (tmp_path / "logs").glob("S9_*_backend.csv")
     assert pd.read_csv(log)["selected"].tolist() == [1]
+
+
+def test_nlp_option_defaults_to_no_suggestions():
+    args = online.parse_args(main_args(Path("calibration.npz")))
+    assert args.nlp == "none"
+    assert online.parse_args(main_args(Path("c.npz"), "--nlp", "gpt2")).nlp == "gpt2"
+    with pytest.raises(SystemExit):
+        online.parse_args(main_args(Path("c.npz"), "--nlp", "trigram"))
+
+
+def test_main_names_the_log_after_the_nlp_condition(tmp_path, monkeypatch):
+    """Without --nlp the log says "none", so the two conditions can't be mixed up."""
+    monkeypatch.setattr(config, "RECORDINGS_DIR", tmp_path / "logs")
+    write_calibration(tmp_path / "calibration.npz")
+
+    def interrupted(backend, eeg_type, eeg_name):
+        assert backend.speller.suggest is None
+        backend.rows.append({"trial": 0, "selected": 1})
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(online, "serve", interrupted)
+    online.main(main_args(tmp_path / "calibration.npz"))
+    assert len(list((tmp_path / "logs").glob("S9_*_none_backend.csv"))) == 1
+
+
+def test_main_with_nlp_gives_the_speller_suggestions(tmp_path, monkeypatch, capsys):
+    """--nlp passes the language model's suggester to the speller, warms it up before
+    serving, and names the log after it. A fake make_suggester stands in for the
+    language model (no wordfreq or torch needed)."""
+    monkeypatch.setattr(config, "RECORDINGS_DIR", tmp_path / "logs")
+    write_calibration(tmp_path / "calibration.npz")
+    calls = []
+
+    def fake_make_suggester(kind):
+        assert kind == "unigram"
+
+        def suggest(text):
+            calls.append(text)
+            return ["HELLO", "HELP", "HE"]
+
+        return suggest
+
+    monkeypatch.setattr(online.language, "make_suggester", fake_make_suggester)
+
+    def interrupted(backend, eeg_type, eeg_name):
+        assert backend.speller.suggestions == ["HELLO", "HELP", "HE"]
+        backend.rows.append({"trial": 0, "selected": 1})
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(online, "serve", interrupted)
+    online.main(main_args(tmp_path / "calibration.npz", "--nlp", "unigram"))
+    assert calls, "the suggester was never called"
+    assert "ready" in capsys.readouterr().out  # the warm-up ran and was reported
+    assert len(list((tmp_path / "logs").glob("S9_*_unigram_backend.csv"))) == 1

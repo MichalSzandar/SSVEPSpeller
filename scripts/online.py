@@ -4,10 +4,14 @@ Usage:
     .venv/bin/python scripts/online.py --method FBCCA-norm --calibration data/recordings/S01_*.npz
     .venv/bin/python scripts/online.py --method CCA --calibration data/recordings/e2e_*.npz --phrases "HELLO WORLD" --cue
     .venv/bin/python scripts/online.py --method FBCCA-norm --calibration A.npz --replay B.npz
+    .venv/bin/python scripts/online.py --method FBCCA-norm --calibration A.npz --nlp gpt2
 
 Start it first, then scripts/speller_gui.py and scripts/record.py (and
 scripts/fake_eeg_stream.py instead of the cap). Ctrl+C stops it and saves the decision
-log to data/recordings/<subject>_<date>_backend.csv (one row per answered trial).
+log to data/recordings/<subject>_<date>_<nlp>_backend.csv (one row per answered trial).
+
+--nlp picks the word suggestions (ssvep/language.py): none (the without-NLP condition),
+unigram, or gpt2. The language model is loaded and warmed up before the GUI connects.
 
 --replay feeds a recording through the same code without LSL or the GUI: the EEG in
 small chunks, as if it arrived live, and every marker once the EEG has reached it. It
@@ -38,7 +42,7 @@ import pandas as pd
 import pylsl
 
 from compare_methods import METHODS, prefilter, with_rejection
-from ssvep import acquisition, config, protocol
+from ssvep import acquisition, config, language, protocol
 from ssvep.datasets import load_recording, recording_freqs
 from ssvep.preprocessing import crop, notch
 from ssvep.speller import Speller
@@ -270,7 +274,8 @@ class Backend:
         None, its row's scores NaN), because the GUI waits for an answer.
         A row holds at least: trial, block, target (from stim_on, the ground truth
         for the log; never used to classify), selected, item (what speller.select
-        returned), text, classify_ms, and score_0 ... score_<n_targets - 1>.
+        returned), text, classify_ms, select_ms (speller.select, which runs the word
+        suggestions when the text changes), and score_0 ... score_<n_targets - 1>.
         """
         messages = []
         for trial in sorted(self.pending):  # a separate list: trials are deleted below
@@ -293,7 +298,9 @@ class Backend:
                 classify_ms = 1000 * (time.perf_counter() - start)
                 message = ""
 
+            start = time.perf_counter()
             item = self.speller.select(selected)
+            select_ms = 1000 * (time.perf_counter() - start)
             del self.pending[trial]
 
             row = {
@@ -304,6 +311,7 @@ class Backend:
                 "item": item,
                 "text": self.speller.text,
                 "classify_ms": classify_ms,
+                "select_ms": select_ms,
             }
             for k, score in enumerate(scores):
                 row[f"score_{k}"] = float(score)
@@ -481,6 +489,12 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--cue", action="store_true", help="frame the next target before each trial"
     )
+    parser.add_argument(
+        "--nlp",
+        choices=language.KINDS,
+        default="none",
+        help="word suggestions: none (the without-NLP condition), unigram or gpt2",
+    )
     parser.add_argument("--eeg-type", default="EEG", help="LSL type of the EEG stream")
     parser.add_argument("--eeg-name", default=None, help="LSL name, if several match")
     parser.add_argument(
@@ -527,7 +541,8 @@ def main(argv=None):
     # Before the session, so a missing folder can't lose its log
     config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = f"{datetime.now():%Y%m%d_%H%M%S}"
-    log_path = config.RECORDINGS_DIR / f"{args.subject}_{stamp}_backend.csv"
+    # The condition in the name, so the analysis can't mix up with and without NLP
+    log_path = config.RECORDINGS_DIR / f"{args.subject}_{stamp}_{args.nlp}_backend.csv"
 
     print(f"Training {args.method} on {args.calibration} ...")
     X, y = load_calibration(args.calibration)
@@ -548,7 +563,17 @@ def main(argv=None):
         f"Trained on {fitted.trials_kept_.sum()} of {len(y)} trials; "
         f"channels dropped: {', '.join(dropped) or 'none'}"
     )
-    speller = Speller()
+    suggest = None
+    if args.nlp != "none":
+        print(f"Loading the {args.nlp} word suggestions ...")
+        suggest = language.make_suggester(args.nlp)
+        # Warm-up: the first call is slower; better now than in the first trial
+        start = time.perf_counter()
+        suggest("HELLO WOR")
+        print(
+            f"Word suggestions ready (warm-up {1000 * (time.perf_counter() - start):.0f} ms)"
+        )
+    speller = Speller(suggest=suggest)
     buffer = acquisition.RingBuffer(
         len(config.CAP_CHANNELS), int(BUFFER_SECONDS * config.EEG_FS)
     )
