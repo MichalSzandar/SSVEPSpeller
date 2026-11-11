@@ -320,6 +320,19 @@ def test_reranker_without_candidates_does_not_call_the_scorer():
     assert not scorer.calls
 
 
+def test_reranker_remembers_texts_it_has_seen():
+    """A text that comes back (after a mistake + BACKSPACE) doesn't call the scorer
+    again, and changing a returned list doesn't change later answers."""
+    scorer = FakeScorer({"TOO": -1.0})
+    reranker = TransformerReranker(UnigramModel(TOY), scorer, n_candidates=10)
+    first = reranker("HELLO T")
+    reranker("HELLO TX")
+    first.append("JUNK")
+    assert reranker("HELLO T") == ["TOO", "THE", "TO"]
+    # One call: "HELLO T" is scored once; "HELLO TX" has no candidates
+    assert scorer.calls == [("HELLO ", ["THE", "TO", "THERE", "THEY", "THEN", "TOO"])]
+
+
 def test_reranker_never_suggests_the_prefix_itself():
     scorer = FakeScorer({"THE": 0.0})
     assert "THE" not in TransformerReranker(UnigramModel(TOY), scorer)("THE")

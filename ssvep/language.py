@@ -56,7 +56,7 @@ def load_vocabulary(n_words: int = 50_000, lang: str = "en") -> dict[str, float]
     consist of A-Z only: words with digits, apostrophes, hyphens or accents are left
     out, so the result can have fewer than ``n_words`` entries.
     """
-    from wordfreq import word_frequency, top_n_list
+    from wordfreq import word_frequency, top_n_list  # pylint: disable=import-error
 
     words = top_n_list(lang, n_words)
     vocabulary = {}
@@ -106,19 +106,14 @@ class UnigramModel:
         character gets 1/27.
         """
         _, prefix = split_text(text)
-        total = 0.0
-        probs = {}
-        for c in CHARS:
-            if c == " ":
-                freq = self.vocabulary.get(prefix, 0.0)
-            else:
-                freq = sum(
-                    freq
-                    for word, freq in self.vocabulary.items()
-                    if word.startswith(prefix + c)
-                )
-            probs[c] = freq
-            total += freq
+        probs = dict.fromkeys(CHARS, 0.0)
+        for word, freq in self.vocabulary.items():
+            if word.startswith(prefix):
+                if word == prefix:
+                    probs[" "] += freq
+                else:
+                    probs[word[len(prefix)]] += freq
+        total = sum(probs.values())
 
         if total > 0.0:
             for c in CHARS:
@@ -155,15 +150,24 @@ class CausalLMScorer:
     """Scores candidate words given the typed context with a causal language model
     (Hugging Face transformers, CPU)."""
 
-    def __init__(self, model_name: str = DEFAULT_MODEL, max_context_words: int = 20):
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL,
+        max_context_words: int = 20,
+        n_threads: int = 4,
+    ):
         """Load the tokenizer and the model (downloaded on first use, then cached) and
         put the model in evaluation mode. Only the last ``max_context_words`` words of
-        the context are used."""
+        the context are used. ``n_threads``: CPU threads for torch, for the whole
+        process (more were not faster here, and it leaves cores for the flicker GUI and
+        LSL)."""
+        import torch  # pylint: disable=import-error
         from transformers import (  # pylint: disable=import-error
             AutoModelForCausalLM,
             AutoTokenizer,
         )
 
+        torch.set_num_threads(n_threads)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(model_name)
         self.model.eval()
@@ -267,22 +271,32 @@ class TransformerReranker:
         self.scorer = scorer
         self.n_candidates = n_candidates
         self.k = k
+        self.seen = {}  # text -> its suggestions, for texts that come back
 
     def __call__(self, text: str) -> list[str]:
         """The best ``k`` of ``unigram.candidates(prefix, n_candidates)``, highest
         score first; equal scores keep the unigram order.
 
         The scorer gets the context exactly as split_text returns it. Without
-        candidates the result is [] and the scorer is not called.
+        candidates the result is [] and the scorer is not called. The suggestions for
+        a text are remembered, so a text that comes back (after a mistake and
+        BACKSPACE) gets them without calling the scorer again.
         """
+        if text in self.seen:
+            return list(self.seen[text])  # a copy: the caller can't change the memory
         context, prefix = split_text(text)
         candidates = self.unigram.candidates(prefix, self.n_candidates)
         if not candidates:
-            return []
-        scores = self.scorer(context, candidates)
-        # Sort by score (descending) and return the top k
-        sorted_pairs = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
-        return [word for word, _ in sorted_pairs[: self.k]]
+            suggestions = []
+        else:
+            scores = self.scorer(context, candidates)
+            # Sort by score (descending) and return the top k
+            sorted_pairs = sorted(
+                zip(candidates, scores), key=lambda x: x[1], reverse=True
+            )
+            suggestions = [word for word, _ in sorted_pairs[: self.k]]
+        self.seen[text] = suggestions
+        return list(suggestions)
 
 
 def make_suggester(kind: str, k: int = 3) -> Callable[[str], list[str]] | None:
