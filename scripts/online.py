@@ -5,13 +5,19 @@ Usage:
     .venv/bin/python scripts/online.py --method CCA --calibration data/recordings/e2e_*.npz --phrases "HELLO WORLD" --cue
     .venv/bin/python scripts/online.py --method FBCCA-norm --calibration A.npz --replay B.npz
     .venv/bin/python scripts/online.py --method FBCCA-norm --calibration A.npz --nlp gpt2
+    .venv/bin/python scripts/online.py --method FBCCA-norm --calibration A.npz --nlp gpt2 --fusion
 
 Start it first, then scripts/speller_gui.py and scripts/record.py (and
 scripts/fake_eeg_stream.py instead of the cap). Ctrl+C stops it and saves the decision
-log to data/recordings/<subject>_<date>_<nlp>_backend.csv (one row per answered trial).
+log to data/recordings/<subject>_<date>_<condition>_backend.csv (one row per answered
+trial), where the condition is the --nlp kind, followed by "-fusion" with --fusion.
 
 --nlp picks the word suggestions (ssvep/language.py): none (the without-NLP condition),
 unigram, or gpt2. The language model is loaded and warmed up before the GUI connects.
+
+--fusion selects the target with the highest posterior of ssvep/fusion.py (classifier
+x language-model prior, floor --floor) instead of the highest classifier score. The
+softmax temperature is fitted at startup on cross-validated calibration scores.
 
 --replay feeds a recording through the same code without LSL or the GUI: the EEG in
 small chunks, as if it arrived live, and every marker once the EEG has reached it. It
@@ -169,6 +175,21 @@ class Decoder:
         ).fit(epochs, y)
         return self
 
+    def cross_val_scores(
+        self, epochs: np.ndarray, y: np.ndarray, n_folds: int = 5
+    ) -> np.ndarray:
+        """Scores of every calibration trial from a classifier that was not trained on
+        it -> (n_trials, n_targets), in trial order: what fusion.fit_temperature needs.
+
+        The trials are split into ``n_folds`` stratified folds in trial order (no
+        shuffling, so each fold holds whole consecutive blocks of a 10-block
+        calibration). Each fold is scored by a classifier fitted on the other folds
+        exactly like ``fit`` fits one: the same cut to n_samples, preprocessing and
+        artifact rejection. Doesn't change this decoder (``estimator_`` stays as it
+        was). Raises ValueError like ``fit`` for epochs shorter than n_samples.
+        """
+        raise NotImplementedError
+
     def epoch(self, buffer: acquisition.RingBuffer, onset: float) -> np.ndarray | None:
         """The raw epoch of the trial whose stim_on came at LSL time ``onset`` ->
         (n_channels, n_samples), or None while its last sample hasn't arrived."""
@@ -200,9 +221,13 @@ class Backend:
         buffer: acquisition.RingBuffer,
         phrases: list[str] = (),
         cue: bool = False,
+        fusion=None,
     ):
         """``phrases``: copy-spelling phrases in order; none means free spelling.
-        ``cue``: ask the GUI to frame the next target before each flicker."""
+        ``cue``: ask the GUI to frame the next target before each flicker.
+        ``fusion``: a fusion.Fusion (or anything with its ``decide`` method) that makes
+        the decisions from the classifier scores and the speller's state, stored as
+        ``self.fusion``; None: the classifier's decision alone."""
         self.decoder = decoder
         self.speller = speller
         self.buffer = buffer
@@ -276,6 +301,13 @@ class Backend:
         for the log; never used to classify), selected, item (what speller.select
         returned), text, classify_ms, select_ms (speller.select, which runs the word
         suggestions when the text changes), and score_0 ... score_<n_targets - 1>.
+
+        With ``fusion``, the decision is fusion.decide(scores, speller), asked before
+        speller.select, so in the state the trial was made in. The row then also holds
+        selected_eeg (the classifier's own decision, the argmax of the scores),
+        prior_0 ... and post_0 ... (decide's prior and posterior) and fusion_ms (the
+        time decide took). A lost trial skips the fusion: selected None, and
+        selected_eeg, the priors, the posteriors and fusion_ms NaN.
         """
         messages = []
         for trial in sorted(self.pending):  # a separate list: trials are deleted below
@@ -527,7 +559,15 @@ def parse_args(argv=None) -> argparse.Namespace:
 def main(argv=None):
     """Train the decoder on the calibration recordings, then either replay a recording
     (print the accuracy) or serve the GUI over LSL until Ctrl+C. Both save the
-    decision log (Backend.rows)."""
+    decision log (Backend.rows).
+
+    --fusion (default off) and --floor (default fusion.FLOOR): the backend gets a
+    fusion.Fusion with the temperature fusion.fit_temperature fits on the decoder's
+    cross_val_scores of the calibration (printed), ``floor`` from --floor, and the
+    vocabulary of the --nlp suggester's UnigramModel (its ``vocabulary``, or
+    ``unigram.vocabulary`` for gpt2), or language.load_vocabulary() if the suggester
+    has none (--nlp none). The log's condition gets "-fusion" (e.g. gpt2-fusion).
+    """
 
     args = parse_args(argv)
     if args.replay is not None:

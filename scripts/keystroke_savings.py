@@ -81,11 +81,14 @@ def copy_phrase(
     max_selections: int = MAX_SELECTIONS,
     accuracy: float = 1.0,
     rng: np.random.Generator | None = None,
+    classify: Callable[[int | None, Speller], int] | None = None,
 ) -> dict:
     """Copy ``phrase`` with ``speller`` -> {"selections", "done", "words"}.
 
     Every selection is the cued target (next_target()) without ``rng``, else
-    decide(target, accuracy, ...). Stops once the phrase is done or after
+    decide(target, accuracy, ...). With ``classify``, every selection is instead
+    classify(cued target, speller), asked before the selection (``accuracy`` and
+    ``rng`` are then not used). Stops once the phrase is done or after
     ``max_selections`` selections. "words" counts the accepted suggestions.
     """
     speller.set_phrase(phrase)
@@ -95,7 +98,9 @@ def copy_phrase(
         if speller.done:
             return {"selections": n, "done": True, "words": words}
         target = speller.next_target()
-        if rng is not None:
+        if classify is not None:
+            target = classify(target, speller)
+        elif rng is not None:
             target = decide(target, accuracy, n_targets, rng)
         old_text = speller.text
         item = speller.select(target)
