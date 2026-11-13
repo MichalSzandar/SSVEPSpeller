@@ -9,9 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ssvep import acquisition, config, protocol
+from sklearn.model_selection import StratifiedKFold
+
+from ssvep import acquisition, config, fusion, language, protocol
 from ssvep.preprocessing import RejectArtifacts, crop, notch
-from ssvep.speller import Speller
+from ssvep.speller import MENU, Speller
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))  # online.py imports compare_methods from there
@@ -532,9 +534,9 @@ def test_pump_feeds_the_cap_columns_and_markers_in_and_pushes_the_answers():
     assert len(outlet.pushed) == n_pushed
 
 
-def write_calibration(path):
+def write_calibration(path, n_blocks=2):
     session = Session(seed=1)
-    for target in np.tile(np.arange(N_TARGETS), 2):
+    for target in np.tile(np.arange(N_TARGETS), n_blocks):
         session.trial(target, after=1.0)
     session.save(path)
 
@@ -667,3 +669,208 @@ def test_main_with_nlp_gives_the_speller_suggestions(tmp_path, monkeypatch, caps
     assert calls, "the suggester was never called"
     assert "ready" in capsys.readouterr().out  # the warm-up ran and was reported
     assert len(list((tmp_path / "logs").glob("S9_*_unigram_backend.csv"))) == 1
+
+
+# --- fusion: Decoder.cross_val_scores ------------------------------------------------
+
+
+def test_cross_val_scores_use_stratified_folds_in_trial_order():
+    """Every trial is scored by a decoder fitted (like fit) on the other folds only."""
+    X, y = calibration(n_blocks=5, seed=3)
+    scores = online.Decoder("CCA-norm", window=WINDOW).cross_val_scores(X, y)
+    assert scores.shape == (len(y), N_TARGETS)
+    for train, test in StratifiedKFold(5).split(X, y):
+        fold = online.Decoder("CCA-norm", window=WINDOW).fit(X[train], y[train])
+        for i in test:
+            expected = fold.classify(X[i, :, : fold.n_samples])[1]
+            np.testing.assert_allclose(scores[i], expected, rtol=1e-6)
+
+
+def test_cross_val_scores_of_a_training_free_method_are_its_scores():
+    """Plain CCA without rejection learns nothing, so every fold's classifier is the
+    same, and so are the scores of a decoder fitted on all trials."""
+    X, y = calibration(n_blocks=5)
+    settings = dict(window=WINDOW, trial_ratio=0, channel_ratio=0)
+    scores = online.Decoder("CCA", **settings).cross_val_scores(X, y, n_folds=4)
+    fitted = online.Decoder("CCA", **settings).fit(X, y)
+    expected = [fitted.classify(epoch)[1] for epoch in X[..., : fitted.n_samples]]
+    np.testing.assert_allclose(scores, np.stack(expected), rtol=1e-6)
+
+
+def test_cross_val_scores_leave_the_decoder_alone():
+    X, y = calibration(n_blocks=5)
+    decoder = online.Decoder("CCA-norm", window=WINDOW)
+    decoder.cross_val_scores(X, y)
+    assert decoder.estimator_ is None
+    fitted = decoder.fit(X, y).estimator_
+    decoder.cross_val_scores(X, y)
+    assert decoder.estimator_ is fitted
+
+
+def test_cross_val_scores_reject_epochs_shorter_than_online():
+    X, y = calibration(n_blocks=5)
+    decoder = online.Decoder("CCA", window=WINDOW)
+    with pytest.raises(ValueError):
+        decoder.cross_val_scores(X[..., : decoder.n_samples - 1], y)
+
+
+# --- fusion: Backend ------------------------------------------------------------------
+
+FAKE_PRIOR = np.arange(1, N_TARGETS + 1) / np.sum(np.arange(1, N_TARGETS + 1))
+
+
+class FakeFusion:
+    """Always decides ``choice``; records the speller state and scores it was given."""
+
+    def __init__(self, choice):
+        self.choice = choice
+        self.calls = []  # (text, group, scores) per decide
+
+    def decide(self, scores, speller):
+        self.calls.append((speller.text, speller.group, np.array(scores)))
+        return self.choice, FAKE_PRIOR, np.eye(N_TARGETS)[self.choice]
+
+
+def fusion_backend(choice):
+    X, y = calibration(n_blocks=2)
+    decoder = online.Decoder("CCA", window=WINDOW).fit(X, y)
+    buffer = acquisition.RingBuffer(len(CAP), int(online.BUFFER_SECONDS * FS))
+    return online.Backend(decoder, Speller(), buffer, fusion=FakeFusion(choice))
+
+
+def test_without_fusion_the_backend_has_none():
+    assert make_backend().fusion is None
+
+
+def test_with_fusion_the_fusion_decides():
+    backend = fusion_backend(choice=3)
+    session = Session()
+    session.trial(0)  # the EEG says target 0
+    (answer,) = answers(Feeder(backend, session).run())
+    assert answer["selected"] == 3
+    assert backend.speller.group == SLOTS[3]
+    (row,) = backend.rows
+    assert (row["target"], row["selected"], row["selected_eeg"]) == (0, 3, 0)
+
+
+def test_fusion_gets_each_trials_scores_in_the_state_it_was_made_in():
+    backend = fusion_backend(choice=3)
+    session = Session()
+    for target in [0, 1, 2]:
+        session.trial(target)
+    Feeder(backend, session).run()
+    group = SLOTS[3]
+    typed = MENU[group][SLOTS[3]]  # what two selections of target 3 type
+    calls = backend.fusion.calls
+    assert [(text, g) for text, g, _ in calls] == [
+        ("", None),
+        ("", group),
+        (typed, None),
+    ]
+    for row, (_, _, scores) in zip(backend.rows, calls):
+        np.testing.assert_allclose(
+            scores, [row[f"score_{k}"] for k in range(N_TARGETS)]
+        )
+
+
+def test_with_fusion_rows_log_the_prior_and_the_posterior():
+    backend = fusion_backend(choice=3)
+    session = Session()
+    session.trial(0)
+    Feeder(backend, session).run()
+    (row,) = backend.rows
+    assert {"block", "item", "text", "classify_ms", "select_ms", "score_0"} <= set(row)
+    np.testing.assert_allclose(
+        [row[f"prior_{k}"] for k in range(N_TARGETS)], FAKE_PRIOR
+    )
+    np.testing.assert_allclose(
+        [row[f"post_{k}"] for k in range(N_TARGETS)], np.eye(N_TARGETS)[3]
+    )
+    assert row["fusion_ms"] >= 0
+
+
+def test_with_fusion_a_lost_trial_is_answered_without_a_decision():
+    backend = fusion_backend(choice=3)
+    backend.buffer = acquisition.RingBuffer(len(CAP), int(0.4 * FS))  # shorter than PRE
+    session = Session()
+    session.trial(1)
+    got = answers(Feeder(backend, session).run())
+    assert [(s["trial"], s["selected"]) for s in got] == [(0, None)]
+    assert backend.fusion.calls == []
+    (row,) = backend.rows
+    assert row["selected"] is None
+    for key in ["selected_eeg", "prior_0", f"post_{N_TARGETS - 1}", "fusion_ms"]:
+        assert np.isnan(row[key])
+
+
+# --- fusion: options and main -------------------------------------------------------
+
+
+def test_fusion_options():
+    args = online.parse_args(main_args(Path("c.npz")))
+    assert args.fusion is False
+    assert args.floor == fusion.FLOOR
+    args = online.parse_args(main_args(Path("c.npz"), "--fusion", "--floor", "0.5"))
+    assert args.fusion is True
+    assert args.floor == 0.5
+
+
+def run_main_until_serving(tmp_path, monkeypatch, *more):
+    """main with a 5-block calibration, stopped as it starts serving -> its Backend."""
+    monkeypatch.setattr(config, "RECORDINGS_DIR", tmp_path / "logs")
+    write_calibration(tmp_path / "calibration.npz", n_blocks=5)
+    seen = {}
+
+    def interrupted(backend, eeg_type, eeg_name):
+        seen["backend"] = backend
+        backend.rows.append({"trial": 0, "selected": 1})
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(online, "serve", interrupted)
+    online.main(main_args(tmp_path / "calibration.npz", *more))
+    return seen["backend"]
+
+
+def test_main_without_fusion_decides_by_the_eeg_alone(tmp_path, monkeypatch):
+    backend = run_main_until_serving(tmp_path, monkeypatch)
+    assert backend.fusion is None
+
+
+def test_main_with_fusion_fits_the_temperature_on_cross_validated_scores(
+    tmp_path, monkeypatch, capsys
+):
+    """With --nlp none the vocabulary is loaded for the fusion alone."""
+    vocabulary = {"HELLO": 5.0, "HELP": 3.0}
+    monkeypatch.setattr(online.language, "load_vocabulary", lambda *a, **k: vocabulary)
+    backend = run_main_until_serving(
+        tmp_path, monkeypatch, "--method", "CCA-norm", "--fusion", "--floor", "0.4"
+    )
+    f = backend.fusion
+    assert isinstance(f, fusion.Fusion)
+    assert f.vocabulary is vocabulary
+    assert f.floor == 0.4
+    X, y = online.load_calibration([tmp_path / "calibration.npz"])
+    scores = online.Decoder("CCA-norm", window=WINDOW).cross_val_scores(X, y)
+    assert f.temperature == pytest.approx(fusion.fit_temperature(scores, y), rel=1e-6)
+    assert "temperature" in capsys.readouterr().out.lower()
+    assert len(list((tmp_path / "logs").glob("S9_*_none-fusion_backend.csv"))) == 1
+
+
+@pytest.mark.parametrize("kind", ["unigram", "gpt2"])
+def test_main_with_fusion_reuses_the_suggesters_vocabulary(tmp_path, monkeypatch, kind):
+    vocabulary = {"HELLO": 5.0, "HELP": 3.0}
+    unigram = language.UnigramModel(vocabulary)
+    flat_scorer = lambda context, words: [0.0] * len(words)  # no torch needed
+    suggesters = {
+        "unigram": unigram,
+        "gpt2": language.TransformerReranker(unigram, flat_scorer),
+    }
+    monkeypatch.setattr(online.language, "make_suggester", lambda k: suggesters[k])
+
+    def no_loading(*args, **kwargs):
+        raise AssertionError("the vocabulary was loaded a second time")
+
+    monkeypatch.setattr(online.language, "load_vocabulary", no_loading)
+    backend = run_main_until_serving(tmp_path, monkeypatch, "--nlp", kind, "--fusion")
+    assert backend.fusion.vocabulary is vocabulary
+    assert len(list((tmp_path / "logs").glob(f"S9_*_{kind}-fusion_backend.csv"))) == 1

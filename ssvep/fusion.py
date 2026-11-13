@@ -64,8 +64,10 @@ def fit_temperature(
     no best T (the smaller, the better): then the result is some small T that makes
     every true target almost certain.
     """
+
     def loss(t):
         return -np.mean(np.log(softmax(scores, t)[np.arange(len(y)), y]))
+
     return minimize_scalar(loss, bounds=bounds).x
 
 
@@ -154,7 +156,9 @@ def target_prior(
             prior[target] = sum(probs.get(item, 0.0) for item in group)
     else:
         open_group = speller.menu[speller.group]
-        items = [open_group[slots[target]] for target in range(n_targets)]  # target order
+        items = [
+            open_group[slots[target]] for target in range(n_targets)
+        ]  # target order
         if BACK in items:
             prior[items.index(BACK)] = error
             remaining = 1 - error

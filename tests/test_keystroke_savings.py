@@ -143,6 +143,27 @@ def test_copy_stops_at_the_selection_limit():
     assert result["selections"] == 50 and not result["done"]
 
 
+def test_copy_with_a_classify_function_asks_it_before_each_selection():
+    seen = []
+
+    def classify(target, speller):
+        seen.append((target, speller.text, speller.group))
+        return target
+
+    result = ks.copy_phrase(Speller(), "AB", classify=classify)
+    assert result == {"selections": 4, "done": True, "words": 0}
+    speller = Speller()
+    a_group = speller.slots.index(0)  # A is in the group drawn in slot 0
+    assert seen[0] == (a_group, "", None)
+    assert [text for _, text, _ in seen] == ["", "", "A", "A"]
+
+
+def test_copy_with_a_classify_function_uses_its_decisions():
+    """A classify function that always answers target 0 never types B."""
+    result = ks.copy_phrase(Speller(), "B", 30, classify=lambda target, speller: 0)
+    assert result["selections"] == 30 and not result["done"]
+
+
 # --- TimedSuggest -----------------------------------------------------------------
 
 
