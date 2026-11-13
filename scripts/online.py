@@ -46,9 +46,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pylsl
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
 
 from compare_methods import METHODS, prefilter, with_rejection
-from ssvep import acquisition, config, language, protocol
+from ssvep import acquisition, config, fusion, language, protocol
 from ssvep.datasets import load_recording, recording_freqs
 from ssvep.preprocessing import crop, notch
 from ssvep.speller import Speller
@@ -188,7 +189,19 @@ class Decoder:
         artifact rejection. Doesn't change this decoder (``estimator_`` stays as it
         was). Raises ValueError like ``fit`` for epochs shorter than n_samples.
         """
-        raise NotImplementedError
+        if epochs.shape[-1] < self.n_samples:
+            raise ValueError(
+                f"Calibration epochs have {epochs.shape[-1]} samples, "
+                f"less than the {self.n_samples} needed for this window"
+            )
+        epochs = epochs[..., : self.n_samples]
+        epochs = self.prepare(epochs)
+        make_estimator = partial(self.factory, self.freqs, self.fs)
+        estimator = with_rejection(make_estimator, self.trial_ratio, self.channel_ratio)
+        cv = StratifiedKFold(n_splits=n_folds, shuffle=False)
+        return cross_val_predict(
+            estimator, epochs, y, cv=cv, method="decision_function"
+        )
 
     def epoch(self, buffer: acquisition.RingBuffer, onset: float) -> np.ndarray | None:
         """The raw epoch of the trial whose stim_on came at LSL time ``onset`` ->
@@ -233,6 +246,7 @@ class Backend:
         self.buffer = buffer
         self.phrases = list(phrases)  # copy phrases still to come
         self.cue = cue
+        self.fusion = fusion
         self.pending = {}  # trial -> its marker fields, while it waits for an answer
         self.rows = []  # one dict per answered trial, the decision log
         self.next_phrase()
@@ -315,13 +329,15 @@ class Backend:
             if not info["complete"]:
                 continue
 
+            n_targets = len(self.decoder.freqs)
             try:
                 epoch = self.decoder.epoch(self.buffer, info["onset"])
             except ValueError:  # that EEG has left the ring buffer
                 selected = None
-                scores = np.full(len(self.decoder.freqs), np.nan)
+                scores = np.full(n_targets, np.nan)
                 classify_ms = np.nan
                 message = "The EEG of this trial was lost"
+                lost = True
             else:
                 if epoch is None:
                     continue  # its last sample hasn't arrived yet
@@ -329,6 +345,28 @@ class Backend:
                 selected, scores = self.decoder.classify(epoch)
                 classify_ms = 1000 * (time.perf_counter() - start)
                 message = ""
+                lost = False
+
+            # Before select: the prior must describe the state the trial was made in
+            extra = {}
+            if self.fusion is not None:
+                if lost:
+                    selected_eeg = np.nan
+                    prior = posterior = np.full(n_targets, np.nan)
+                    fusion_ms = np.nan
+                else:
+                    selected_eeg = selected
+                    start = time.perf_counter()
+                    selected, prior, posterior = self.fusion.decide(
+                        scores, self.speller
+                    )
+                    fusion_ms = 1000 * (time.perf_counter() - start)
+                extra["selected_eeg"] = selected_eeg
+                for k in range(n_targets):
+                    extra[f"prior_{k}"] = float(prior[k])
+                for k in range(n_targets):
+                    extra[f"post_{k}"] = float(posterior[k])
+                extra["fusion_ms"] = fusion_ms
 
             start = time.perf_counter()
             item = self.speller.select(selected)
@@ -347,6 +385,7 @@ class Backend:
             }
             for k, score in enumerate(scores):
                 row[f"score_{k}"] = float(score)
+            row.update(extra)
             self.rows.append(row)
 
             # Built after select, so the answer shows the new labels and next target
@@ -527,6 +566,17 @@ def parse_args(argv=None) -> argparse.Namespace:
         default="none",
         help="word suggestions: none (the without-NLP condition), unigram or gpt2",
     )
+    parser.add_argument(
+        "--fusion",
+        action="store_true",
+        help="decide by classifier x language-model prior (ssvep/fusion.py)",
+    )
+    parser.add_argument(
+        "--floor",
+        type=float,
+        default=fusion.FLOOR,
+        help="share of the fusion's prior spread evenly over the targets",
+    )
     parser.add_argument("--eeg-type", default="EEG", help="LSL type of the EEG stream")
     parser.add_argument("--eeg-name", default=None, help="LSL name, if several match")
     parser.add_argument(
@@ -556,6 +606,35 @@ def parse_args(argv=None) -> argparse.Namespace:
     return args
 
 
+def suggester_vocabulary(suggest) -> dict[str, float] | None:
+    """The vocabulary of the suggester's UnigramModel: its own ``vocabulary``, or
+    ``unigram.vocabulary`` (TransformerReranker); None without one."""
+    vocabulary = getattr(suggest, "vocabulary", None)
+    if vocabulary is None and hasattr(suggest, "unigram"):
+        vocabulary = suggest.unigram.vocabulary
+    return vocabulary
+
+
+def make_fusion(
+    decoder: Decoder, X: np.ndarray, y: np.ndarray, suggest, floor: float
+) -> fusion.Fusion:
+    """A fusion.Fusion for ``decoder``: the temperature fitted on its cross-validated
+    scores of the calibration (printed, with the cross-validated accuracy), the
+    suggester's vocabulary (loaded if it has none) and ``floor``."""
+    print("Fitting the fusion temperature on cross-validated scores ...")
+    scores = decoder.cross_val_scores(X, y)
+    temperature = fusion.fit_temperature(scores, y)
+    accuracy = np.mean(scores.argmax(axis=1) == y)
+    print(
+        f"Cross-validated accuracy {accuracy:.1%}; fusion temperature "
+        f"{temperature:.4g}, floor {floor:g}"
+    )
+    vocabulary = suggester_vocabulary(suggest)
+    if vocabulary is None:
+        vocabulary = language.load_vocabulary()
+    return fusion.Fusion(temperature, vocabulary, floor=floor)
+
+
 def main(argv=None):
     """Train the decoder on the calibration recordings, then either replay a recording
     (print the accuracy) or serve the GUI over LSL until Ctrl+C. Both save the
@@ -582,7 +661,8 @@ def main(argv=None):
     config.RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = f"{datetime.now():%Y%m%d_%H%M%S}"
     # The condition in the name, so the analysis can't mix up with and without NLP
-    log_path = config.RECORDINGS_DIR / f"{args.subject}_{stamp}_{args.nlp}_backend.csv"
+    condition = f"{args.nlp}-fusion" if args.fusion else args.nlp
+    log_path = config.RECORDINGS_DIR / f"{args.subject}_{stamp}_{condition}_backend.csv"
 
     print(f"Training {args.method} on {args.calibration} ...")
     X, y = load_calibration(args.calibration)
@@ -613,11 +693,16 @@ def main(argv=None):
         print(
             f"Word suggestions ready (warm-up {1000 * (time.perf_counter() - start):.0f} ms)"
         )
+    fuser = None  # not "fusion": that name is the module
+    if args.fusion:
+        fuser = make_fusion(decoder, X, y, suggest, args.floor)
     speller = Speller(suggest=suggest)
     buffer = acquisition.RingBuffer(
         len(config.CAP_CHANNELS), int(BUFFER_SECONDS * config.EEG_FS)
     )
-    backend = Backend(decoder, speller, buffer, phrases=args.phrases, cue=args.cue)
+    backend = Backend(
+        decoder, speller, buffer, phrases=args.phrases, cue=args.cue, fusion=fuser
+    )
 
     try:
         if args.replay is None:
