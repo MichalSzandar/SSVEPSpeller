@@ -55,11 +55,85 @@ system does, and the non-functional requirements, which constrain how it does it
 \section{Hardware}
 \label{sec:hardware}
 
+
+
 \section{Architecture}
 \label{sec:architecture}
 
-% (moved from 3.1) The system should be modular, with separate processes for stimulus
-% presentation and EEG acquisition, and communicate via Lab Streaming Layer.
+The system consists of four processes (\cref{fig:architecture}):
+\begin{enumerate}
+    \item the \ac{GUI}, which presents the flickering stimulus, keeps the frame clock,
+      draws the labels and the text it receives, and takes the operator's key presses;
+    \item the backend, which acquires the \ac{EEG} into a ring buffer, preprocesses and
+      classifies each trial, and owns the speller state and the \ac{LM};
+    \item the recorder, which saves the \ac{EEG} and the stimulus events of a session to
+      a file for offline analysis;
+    \item the \ac{EEG} source: the cap's streaming software, or a simulated \ac{EEG}
+      stream for testing without the cap (\cref{sec:testing}).
+\end{enumerate}
+Because the processes meet only through their data streams, each of them can be
+replaced or run on its own: the simulated stream stands in for the cap, the recorder
+can record any session, and the backend can replay a recording without the \ac{GUI}.
+
+\begin{figure}[tb]
+  \centering
+  \begin{tikzpicture}[
+      proc/.style={draw, rounded corners, align=center, minimum width=3.1cm,
+        minimum height=1.5cm, font=\footnotesize},
+      stream/.style={-{Stealth[length=2.2mm]}, thick},
+      lbl/.style={font=\footnotesize}]
+    \node[proc] (backend) {\textbf{Backend}\\ring buffer, classifier,\\speller state, \acs{LM}};
+    \node[proc, left=2.0cm of backend] (gui) {\textbf{\acs{GUI}}\\stimulus, frame clock,\\labels and text};
+    \node[proc, right=2.0cm of backend] (source) {\textbf{\acs{EEG} source}\\cap software or\\simulated stream};
+    \node[proc, below=1.5cm of backend] (rec) {\textbf{Recorder}\\\acs{EEG} and markers\\$\rightarrow$ recording file};
+    \draw[stream] ([yshift=2.5mm]gui.east) -- node[lbl, above] {markers} ([yshift=2.5mm]backend.west);
+    \draw[stream] ([yshift=-2.5mm]backend.west) -- node[lbl, below] {state} ([yshift=-2.5mm]gui.east);
+    \draw[stream] (source.west) -- node[lbl, above] {\acs{EEG}} (backend.east);
+    \draw[stream] (gui.south) |- node[lbl, pos=0.75, below] {markers} (rec.west);
+    \draw[stream] (source.south) |- node[lbl, pos=0.75, below] {\acs{EEG}} (rec.east);
+  \end{tikzpicture}
+  \caption{Processes of the system and the \acs{LSL} streams between them. The
+    recorder only listens, so it records calibration and online sessions alike.}
+  \label{fig:architecture}
+\end{figure}
+
+The \ac{GUI} and the backend are separate processes because classification,
+language-model inference or a garbage collection inside the drawing loop could delay a
+screen refresh, and every dropped frame distorts the stimulus (NFR1). Threads within
+one process would not prevent this: in CPython, all threads share one interpreter lock
+and one garbage collector, so a long step in one thread can still delay the others.
+The backend owns the speller state and the \ac{LM}; the \ac{GUI} only displays the
+state it receives and reports every stimulus event back to the backend as a marker.
+
+All processes communicate through the \ac{LSL}~\citep{kothe2025lsl}, over three
+streams: the \ac{EEG} stream from the cap, the marker stream from the \ac{GUI}, and the
+state stream from the backend. Markers and states are \ac{JSON} strings, one object per
+message. The \ac{GUI} timestamps every marker with the time of the screen refresh that
+showed the event (\cref{sec:stimulus}), and \ac{LSL} maps the timestamps of all streams
+onto one clock, so the backend and the recorder can compare marker times with \ac{EEG}
+sample times directly.
+I chose \ac{LSL} because it provides this common clock, with clock-offset correction and
+dejittering, and because it is widely used in \ac{BCI} research, so many \ac{EEG}
+devices, including the cap used here, stream to it directly~\citep{kothe2025lsl}.
+
+The calibration program and the speller \ac{GUI} share the stimulus code and send the
+same marker stream, so the recorder, the code that loads recordings and the simulated
+\ac{EEG} stream work with both of them unchanged. They differ in what surrounds the
+flicker: the calibration program runs a fixed sequence of cued trials without a
+backend, while the speller \ac{GUI} shows the labels, the typed text and the feedback it
+receives from the backend.
+The same principle applies to the signal processing: one Python package serves the
+offline analysis, the calibration and the online speller, so the \ac{EEG} is processed
+identically in all three (NFR3, verified in \cref{sec:testing}).
+
+The software consists of this package and one script per program. The package holds
+everything that does not draw on the screen: the signal processing, the classifiers, the
+stimulus sequences and layout, the speller state machine, the \ac{LM} and the message
+format. The scripts are the calibration program, the speller \ac{GUI}, the backend, the
+recorder, the simulated \ac{EEG} stream and the offline comparison of methods.
+\Cref{app:software} lists the modules.
+
+
 
 \section{Stimulus presentation and timing}
 \label{sec:stimulus}
