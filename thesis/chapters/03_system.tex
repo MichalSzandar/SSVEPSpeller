@@ -1,0 +1,80 @@
+% Chapter 3 (thesis tasks 2 and 3, part of 7).
+% Outline: the engineering part: requirements, hardware (BrainAccess cap with dry
+% electrodes, 120 Hz monitor), the two-process architecture connected by Lab Streaming
+% Layer, the flicker stimulus and its frame timing, the 6-target two-level speller
+% layout, the calibration protocol, EEG acquisition and recording, the online speller
+% loop, and how the system was tested without the cap.
+
+\chapter{System design and implementation}
+\label{ch:system}
+
+\section{Requirements}
+\label{sec:requirements}
+
+The system is intended for people with \ac{ALS} or locked-in syndrome, who have
+lost most muscle control but retain their cognitive function and can still move their
+eyes (\cref{sec:motivation}).
+It must work on low-cost hardware: an \ac{EEG} cap with a low number of channels and
+dry electrodes, which need no gel.
+With it, the user must be able to spell with high accuracy and speed, helped by a
+language model that predicts the next character or word.
+\Cref{tab:requirements} lists the functional requirements, which describe what the
+system does, and the non-functional requirements, which constrain how it does it.
+
+\begin{table}[tb]
+  \centering
+  \caption{Functional (FR) and non-functional (NFR) requirements.}
+  \label{tab:requirements}
+  \begin{tabularx}{\textwidth}{@{}lXl@{}}
+    \toprule
+    ID & Requirement: the system must\ldots & Verified in \\
+    \midrule
+    \multicolumn{3}{@{}l}{\textit{Functional requirements}} \\
+    FR1 & present six targets flickering at chosen frequencies between 8 and 15\,Hz, not limited to divisors of the refresh rate & \\
+    FR2 & timestamp every stimulus event on the same clock as the \acs{EEG} & \\
+    FR3 & run a calibration session that records labelled \acs{EEG} trials for training the classifier & \\
+    FR4 & record the \acs{EEG} and the stimulus events to a file for offline analysis & \\
+    FR5 & classify each selection in real time and show the selected target to the user & \\
+    FR6 & let the user type any English text with only six targets: the 26 letters, space and backspace, a way to undo a wrong selection, and accepting a suggested word & \\
+    FR7 & suggest words from a language model that can be switched on and off, so that the online experiment can compare both conditions & \\
+    FR8 & support copy-spelling of a given phrase: cue the next correct target and log it as the ground truth for accuracy and \acs{ITR} & \\
+    FR9 & replay a recording offline through the online processing pipeline & \\
+    \midrule
+    \multicolumn{3}{@{}l}{\textit{Non-functional requirements}} \\
+    NFR1 & keep the stimulus timing precise, with no dropped frames in normal operation & \\
+    NFR2 & finish the classification and the word suggestions within the 0.5\,s gaze shift & \\
+    NFR3 & process and classify the \acs{EEG} identically offline and online & \\
+    NFR4 & be testable end to end without the \acs{EEG} cap & \\
+    NFR5 & run on a consumer laptop without a dedicated graphics card, with a low-cost dry-electrode \acs{EEG} cap & \\
+    NFR6 & be publicly available, with automated tests that run on every commit (continuous integration) & \\
+    NFR7 & be used only after the user has been warned about the risk of photosensitive epilepsy & \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section{Hardware}
+\label{sec:hardware}
+
+\section{Architecture}
+\label{sec:architecture}
+
+% (moved from 3.1) The system should be modular, with separate processes for stimulus
+% presentation and EEG acquisition, and communicate via Lab Streaming Layer.
+
+\section{Stimulus presentation and timing}
+\label{sec:stimulus}
+
+\section{Speller layout}
+\label{sec:layout}
+
+\section{Calibration protocol}
+\label{sec:calibration}
+
+\section{EEG acquisition and recording}
+\label{sec:acquisition}
+
+\section{Online speller}
+\label{sec:online}
+
+\section{Testing and verification}
+\label{sec:testing}

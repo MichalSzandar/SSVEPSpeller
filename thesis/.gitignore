@@ -1,0 +1,15 @@
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.synctex.gz
+*.tdo
+*.toc
+# The compiled thesis: rebuild it from the sources
+/thesis.pdf
