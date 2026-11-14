@@ -5,14 +5,27 @@
 
 \chapter*{Abstract}
 
+This thesis concerns the design and implementation of a non-invasive, real-time brain–computer interface (BCI) intended to support communication for people with severe motor impairments. The system is based on the steady-state visual evoked potential (SSVEP) paradigm. The user selects characters or words by focusing their gaze on interface elements that flicker at different frequencies.
 
+The review part covers the current state of research on BCI systems, the SSVEP paradigm, and real-time EEG signal processing methods. The engineering part includes several components: a graphical user interface with precise visual stimulus timing, an application programming interface (API) for real-time EEG data acquisition, and a signal processing pipeline. The pipeline covers artifact removal as well as temporal and spatial filtering.
+
+The research part compares spatial filtering and classification methods, including canonical correlation analysis (CCA) and task-related component analysis (TRCA), together with selected machine learning algorithms. The algorithms were trained and evaluated on offline recorded data. The system is integrated with a natural language processing (NLP) model that predicts subsequent words in real time. This is intended to increase communication speed and reduce user fatigue.
+
+The integrated system was validated in online experiments. Classification accuracy and information transfer rate (ITR) were measured both with and without text prediction. The results show to what extent combining SSVEP classification with language prediction improves communication efficiency in BCI systems. 
 \bigskip
-\noindent\textbf{Keywords:}
+\noindent\textbf{Keywords: brain–computer interface, BCI, electroencephalography, EEG, steady-state visual evoked potentials, SSVEP, real-time signal processing, spatial filtering, CCA, TRCA, machine learning, natural language processing, text prediction, information transfer rate, ITR, assistive communication }
 
 \begin{otherlanguage}{polish}
 \chapter*{Streszczenie}
 
+Praca dotyczy projektu i implementacji nieinwazyjnego interfejsu mózg–komputer (BCI) działającego w czasie rzeczywistym, przeznaczonego do komunikacji osób z ciężkimi dysfunkcjami ruchowymi. System wykorzystuje paradygmat potencjałów wywołanych stanu ustalonego (SSVEP). Użytkownik wybiera w nim znaki lub słowa, skupiając wzrok na elementach interfejsu migających z różnymi częstotliwościami.
+
+W części przeglądowej omówiono aktualny stan wiedzy dotyczący systemów BCI, paradygmatu SSVEP oraz metod przetwarzania sygnału EEG w czasie rzeczywistym. Część inżynierska obejmuje kilka elementów: graficzny interfejs użytkownika z precyzyjną synchronizacją bodźców wzrokowych, interfejs programistyczny (API) do akwizycji danych z urządzenia EEG w czasie rzeczywistym oraz potok przetwarzania sygnału. Potok ten obejmuje usuwanie artefaktów oraz filtrację czasową i przestrzenną.
+
+Część badawcza polega na porównaniu metod filtracji przestrzennej i klasyfikacji, m.in. analizy korelacji kanonicznej (CCA) i analizy komponentów powiązanych z zadaniem (TRCA), a także wybranych algorytmów uczenia maszynowego. Algorytmy wytrenowano i oceniono na danych zarejestrowanych offline. System zintegrowano z modelem przetwarzania języka naturalnego (NLP), który w czasie rzeczywistym podpowiada kolejne słowa. Ma to zwiększyć szybkość komunikacji i ograniczyć zmęczenie użytkownika.
+
+Działanie zintegrowanego systemu zweryfikowano w eksperymentach online. Oceniono dokładność klasyfikacji oraz szybkość transferu informacji (ITR) zarówno z predykcją tekstu, jak i bez niej. Wyniki pozwalają określić, w jakim stopniu połączenie klasyfikacji sygnałów SSVEP z predykcją językową poprawia efektywność komunikacji w systemach BCI. 
 
 \bigskip
-\noindent\textbf{Słowa kluczowe:}
+\noindent\textbf{Słowa kluczowe: interfejs mózg–komputer, BCI, elektroencefalografia, EEG, potencjały wywołane stanu ustalonego, SSVEP, przetwarzanie sygnałów w czasie rzeczywistym, filtracja przestrzenna, CCA, TRCA, uczenie maszynowe, przetwarzanie języka naturalnego, predykcja tekstu, szybkość transferu informacji, ITR, komunikacja wspomagająca }
 \end{otherlanguage}
