@@ -275,6 +275,116 @@ def test_an_empty_word_cell_types_nothing():
     assert speller.group is None
 
 
+# --- word undo ---------------------------------------------------------------------
+
+
+def preview_label(speller, item):
+    """Label of ``item``'s cell, read from the level-1 preview of its group."""
+    g, i = find(speller.menu, item)
+    preview = speller.labels()[speller.slots.index(g)]
+    return preview[speller.slots.index(i)]
+
+
+def test_backspace_right_after_a_word_restores_the_text_before_it():
+    """Not "SAY HELLO" (one character) and not "SAY " (the whole word): the word
+    being typed comes back as it was."""
+    suggest = recording("hello")
+    speller = Speller(suggest=suggest)
+    type_text(speller, "SAY HEL")
+    type_item(speller, WORDS[0])
+    assert speller.text == "SAY HELLO "
+    assert type_item(speller, BACKSPACE) == BACKSPACE
+    assert speller.text == "SAY HEL"
+    assert speller.group is None
+    assert suggest.calls[-1] == "SAY HEL"
+
+
+def test_backspace_undoes_accepted_words_newest_first():
+    speller = Speller(suggest=recording("hello", "world"))
+    type_text(speller, "SAY HEL")
+    type_item(speller, WORDS[0])
+    type_item(speller, WORDS[1])
+    assert speller.text == "SAY HELLO WORLD "
+    type_item(speller, BACKSPACE)
+    assert speller.text == "SAY HELLO "
+    type_item(speller, BACKSPACE)
+    assert speller.text == "SAY HEL"
+    type_item(speller, BACKSPACE)  # no word left to undo: one character
+    assert speller.text == "SAY HE"
+
+
+@pytest.mark.parametrize("typed", ["X", " "])
+def test_typing_after_a_word_ends_the_undo(typed):
+    speller = Speller(suggest=recording("hello"))
+    type_text(speller, "HEL")
+    type_item(speller, WORDS[0])
+    type_text(speller, typed)
+    type_item(speller, BACKSPACE)
+    assert speller.text == "HELLO "
+    type_item(speller, BACKSPACE)
+    assert speller.text == "HELLO"
+
+
+def test_a_plain_backspace_ends_the_undo():
+    """After ⌫ deleted a character, the next ⌫ deletes one too, even though an
+    earlier word could still be undone in principle."""
+    speller = Speller(suggest=recording("hello"))
+    type_item(speller, WORDS[0])
+    type_text(speller, "A")
+    type_item(speller, BACKSPACE)
+    type_item(speller, BACKSPACE)
+    assert speller.text == "HELLO"
+
+
+def test_selections_that_type_nothing_keep_the_undo():
+    """BACK and an empty word cell leave the text as it is, so ⌫ still undoes."""
+    speller = Speller(suggest=recording("hello"))
+    type_text(speller, "HE")
+    type_item(speller, WORDS[0])
+    type_item(speller, BACK)
+    type_item(speller, WORDS[2])  # only one suggestion: an empty cell
+    speller.select(None)
+    type_item(speller, BACKSPACE)
+    assert speller.text == "HE"
+
+
+def test_set_phrase_ends_the_undo():
+    speller = Speller(suggest=recording("hello"))
+    type_item(speller, WORDS[0])
+    speller.set_phrase("HI")
+    assert preview_label(speller, BACKSPACE) == BACKSPACE
+    type_item(speller, BACKSPACE)
+    assert speller.text == ""
+
+
+def test_backspace_label_names_the_word_it_undoes():
+    speller = Speller(suggest=recording("hello", "world"))
+    assert preview_label(speller, BACKSPACE) == BACKSPACE
+    type_item(speller, WORDS[0])
+    type_item(speller, WORDS[1])
+    assert preview_label(speller, BACKSPACE) == f"{BACKSPACE} WORLD"
+    # The same label at level 2, in the open group
+    g, i = find(speller.menu, BACKSPACE)
+    speller.select(speller.slots.index(g))
+    assert speller.labels()[speller.slots.index(i)] == f"{BACKSPACE} WORLD"
+    speller.select(speller.slots.index(i))
+    assert preview_label(speller, BACKSPACE) == f"{BACKSPACE} HELLO"
+    type_item(speller, BACKSPACE)
+    assert preview_label(speller, BACKSPACE) == BACKSPACE
+    protocol.validate_state(state(speller))
+
+
+def test_without_suggestions_backspace_always_deletes_one_character():
+    """The without-NLP condition is unchanged: no word is ever accepted."""
+    speller = Speller()
+    type_text(speller, "HI YOU")
+    type_item(speller, WORDS[0])
+    for expected in ["HI YO", "HI Y", "HI ", "HI"]:
+        assert preview_label(speller, BACKSPACE) == BACKSPACE
+        type_item(speller, BACKSPACE)
+        assert speller.text == expected
+
+
 # --- copy-spelling -----------------------------------------------------------------
 
 
@@ -468,6 +578,39 @@ def test_a_suggestion_that_would_go_wrong_is_ignored():
     speller.set_phrase("HELLO")
     type_text(speller, "HEL")
     assert speller.next_target() == targets_for(speller, "L")[0]
+
+
+def test_a_wrong_word_takes_one_correction():
+    """HEL + HELLO by mistake -> "HELLO ". Following next_target, two selections
+    (group, ⌫) bring back "HEL", instead of two per deleted character."""
+    speller = Speller(suggest=recording("hello"))
+    speller.set_phrase("HELP ME")
+    type_text(speller, "HEL")
+    type_item(speller, WORDS[0])
+    assert speller.next_target() == targets_for(speller, BACKSPACE)[0]
+    for _ in range(2):
+        speller.select(speller.next_target())
+    assert speller.text == "HEL"
+    assert speller.next_target() == targets_for(speller, "P")[0]
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_a_noisy_subject_with_suggestions_finishes_the_phrase(seed):
+    """As the noisy test above, with suggestions that random selections accept by
+    mistake now and then."""
+    rng = np.random.default_rng(seed)
+    speller = Speller(
+        suggest=prefix_suggest(["HELP", "HELLO", "HELD", "WORK", "WORLD", "WORD"])
+    )
+    speller.set_phrase("HELLO WORLD")
+    for _ in range(1000):
+        if speller.done:
+            break
+        target = speller.next_target()
+        if target is None or rng.random() < 0.3:
+            target = int(rng.integers(6))
+        speller.select(target)
+    assert speller.done, speller.text
 
 
 @pytest.mark.parametrize("seed", range(5))

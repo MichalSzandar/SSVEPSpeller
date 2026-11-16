@@ -29,7 +29,8 @@ out take the values in STATE_DEFAULTS, only ``labels`` is required:
 
     labels    one entry per target: a string drawn on the square, or a list of one
               string per target, drawn as a small ring on the square with entry k where
-              target k sits on the screen (a preview of the next menu level). Both
+              target k sits on the screen (a preview of the next menu level; a list
+              with words in it is drawn as lines in clockwise screen order). Both
               levels are in target order, not screen order: with TARGET_SLOTS
               [0, 3, 1, 4, 2, 5], ["A", "B", "C", "D", "E", "F"] reads A, C, E, B, D, F
               clockwise from the top left.

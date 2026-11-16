@@ -19,11 +19,19 @@ Items:
 
     "A" ... "Z"  type that letter
     SPACE        type a space
-    BACKSPACE    delete the last character (nothing if the text is empty)
+    BACKSPACE    delete the last character (nothing if the text is empty), or, right
+                 after an accepted word, undo that word (below)
     BACK         close the group without typing (undoes a wrong group selection)
     WORDS[k]     accept the k-th word suggestion: it replaces the word being typed
                  (everything after the last space) and a space follows it. With fewer
                  than k + 1 suggestions the cell is empty and selecting it types nothing.
+
+Word undo: while nothing but accepted words has changed the text, BACKSPACE restores
+the text from before the newest accepted word (one word per BACKSPACE, newest first),
+and its label says which word it removes ("⌫ WORD"). A wrong word accepted by mistake
+then costs one correction instead of one BACKSPACE per character. Typing a letter, a
+space or a plain BACKSPACE ends the undo. Without suggestions no word is ever accepted,
+so BACKSPACE always deletes one character.
 
 Copy-spelling: with a phrase set, next_target() says which target the subject should
 select next. The GUI cues it (if asked) and logs it as ground truth, and the fake EEG
@@ -62,6 +70,8 @@ class Speller:
         group        slot of the open group at level 2, None at level 1
         suggestions  the words in the WORDS cells for the current text: uppercase, best
                      first, at most len(WORDS); [] without ``suggest``
+        accepted     words BACKSPACE can undo, newest last: (text before the word was
+                     accepted, word); [] once anything else changed the text
     """
 
     def __init__(
@@ -80,6 +90,7 @@ class Speller:
         self.phrase = ""
         self.group = None
         self.suggestions = []
+        self.accepted = []
         self.update_suggestions()
 
     def update_suggestions(self) -> None:
@@ -114,13 +125,17 @@ class Speller:
         self.phrase = phrase
         self.text = ""
         self.group = None
+        self.accepted = []
         self.update_suggestions()
 
     def _item_label(self, item: str) -> str:
-        """What the GUI draws for ``item``: the item itself, except WORDS[k]."""
+        """What the GUI draws for ``item``: the item itself, except WORDS[k] (the
+        suggestion) and BACKSPACE while it undoes a word ("⌫ WORD")."""
         if item in WORDS:
             i = WORDS.index(item)
             return self.suggestions[i] if i < len(self.suggestions) else ""
+        if item == BACKSPACE and self.accepted:
+            return f"{BACKSPACE} {self.accepted[-1][1]}"
         return item
 
     def _group_labels(self, group: list[str]) -> list[str]:
@@ -165,15 +180,22 @@ class Speller:
             if item in WORDS:
                 i = WORDS.index(item)
                 if i < len(self.suggestions):
-                    self.text = self._text_with_word(self.suggestions[i])
+                    word = self.suggestions[i]
+                    self.accepted.append((self.text, word))
+                    self.text = self._text_with_word(word)
             elif item == SPACE:
                 self.text += " "
+                self.accepted = []
             elif item == BACKSPACE:
-                self.text = self.text[:-1]
+                if self.accepted:
+                    self.text, _ = self.accepted.pop()
+                else:
+                    self.text = self.text[:-1]
             elif item == BACK:
                 pass
             else:
                 self.text += item
+                self.accepted = []
             self.group = None
             if self.text != old_text:
                 self.update_suggestions()

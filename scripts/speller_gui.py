@@ -98,13 +98,33 @@ def fit_tail(label: pyglet.text.Label, text: str, max_height: float):
     label.text = "…" + text[low:]
 
 
+def preview_lines(entry: list[str], slots: list[int]) -> list[str]:
+    """Lines of a group preview drawn as a list (SpellerScene): the words (items
+    longer than one character) one per line, then the single symbols on one line,
+    each in clockwise screen order (entry k is shown in slot slots[k]); empty items
+    are left out."""
+    by_slot = [""] * len(entry)
+    for k, item in enumerate(entry):
+        by_slot[slots[k]] = item
+    lines = [item for item in by_slot if len(item) > 1]
+    symbols = [item for item in by_slot if len(item) == 1]
+    if symbols:
+        lines.append(" ".join(symbols))
+    return lines
+
+
 class SpellerScene(FlickerScene):
     """The calibration targets plus the speller's labels, text and feedback frame.
 
     A target's label is a string drawn on the square, or a list of one string per target
-    drawn as a small ring on the square: entry k sits where target k sits on the screen.
-    Labels are hidden while ``show_labels`` is false (during the flicker). The middle
-    of the ring shows the phrase to copy, the typed text with a cursor, and a message.
+    (a preview of the next menu level). A list of single symbols is drawn as a small
+    ring on the square: entry k sits where target k sits on the screen. A list with
+    words in it is drawn as lines instead, one word per line in clockwise screen order
+    and the single symbols together on the last line, all in one font size: in a mini
+    ring a long word gets an unreadably small font, and neighbouring words run
+    together. Labels are hidden while ``show_labels`` is false (during the flicker).
+    The middle of the ring shows the phrase to copy, the typed text with a cursor, and
+    a message.
     """
 
     def __init__(
@@ -195,6 +215,36 @@ class SpellerScene(FlickerScene):
             label.font_size *= scale
         self.target_labels.append(label)
 
+    def _add_lines(self, lines: list[str], x: float, y: float, max_size: float, color):
+        """Bold lines centred on (x, y), one font size for all, shrunk so that the
+        block fits a ``max_size`` px square."""
+        labels = [
+            pyglet.text.Label(
+                line,
+                x=x,
+                anchor_x="center",
+                anchor_y="center",
+                font_size=0.4 * max_size,
+                font_name=FONT,
+                weight="bold",
+                color=color,
+                batch=self.label_batch,
+            )
+            for line in lines
+        ]
+        # Text size scales with the font size, so one measurement is enough
+        width = max(label.content_width for label in labels)
+        line_height = max(label.content_height for label in labels)
+        scale = min(
+            1.0, max_size / max(width, 1), max_size / max(len(lines) * line_height, 1)
+        )
+        line_height *= scale
+        top = y + len(lines) * line_height / 2
+        for i, label in enumerate(labels):
+            label.font_size *= scale
+            label.y = top - (i + 0.5) * line_height
+        self.target_labels.extend(labels)
+
     def set_labels(self, labels: list):
         """Replace the target labels (protocol format, one entry per target)."""
         for label in self.target_labels:
@@ -203,13 +253,21 @@ class SpellerScene(FlickerScene):
         for (x, y), entry, color in zip(self.centres, labels, self.label_colors):
             if isinstance(entry, str):
                 self._add_label(entry, x, y, LABEL_FILL * self.size, color)
-                continue
-            mini, cell = stimulus.ring_layout(
-                len(entry), self.size, self.size, self.slots, MINI_FILL, MINI_MARGIN
-            )
-            left, bottom = x - self.size / 2, y - self.size / 2
-            for (mx, my), item in zip(mini, entry):
-                self._add_label(item, left + mx, bottom + my, cell, color)
+            elif all(len(item) <= 1 for item in entry):
+                mini, cell = stimulus.ring_layout(
+                    len(entry), self.size, self.size, self.slots, MINI_FILL, MINI_MARGIN
+                )
+                left, bottom = x - self.size / 2, y - self.size / 2
+                for (mx, my), item in zip(mini, entry):
+                    self._add_label(item, left + mx, bottom + my, cell, color)
+            else:
+                self._add_lines(
+                    preview_lines(entry, self.slots),
+                    x,
+                    y,
+                    LABEL_FILL * self.size,
+                    color,
+                )
 
     def set_text(self, phrase: str, text: str, message: str):
         """Phrase, typed text (its end, if it is too long) and message."""
