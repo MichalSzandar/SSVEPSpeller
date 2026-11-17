@@ -8,6 +8,10 @@
 \chapter{System design and implementation}
 \label{ch:system}
 
+This chapter covers what the system is supposed to do, how it is built, and how it was tested. It describes the
+requirements, the hardware, the architecture, the stimulus presentation and timing, the speller layout, the calibration protocol,
+the \ac{EEG} acquisition and recording, the online speller loop, and how the system was tested without the cap.
+
 \section{Requirements}
 \label{sec:requirements}
 
@@ -148,7 +152,7 @@ onto one clock, so the backend and the recorder can compare marker times with \a
 sample times directly.
 I chose \ac{LSL} because it provides this common clock, with clock-offset correction and
 dejittering, and because it is widely used in \ac{BCI} research, so many \ac{EEG}
-devices, including the cap used here, stream to it directly~\citep{kothe2025lsl}.
+devices stream to it directly~\citep{kothe2025lsl}, including the cap used here.
 
 The calibration program and the speller \ac{GUI} share the stimulus code and send the
 same marker stream, so the recorder, the code that loads recordings and the simulated
@@ -325,9 +329,9 @@ I selected six targets because it is the smallest number that fits a two-level m
 the 26 letters, space, backspace and three suggestions: five targets give only
 $5 \times 5 = 25$ cells.
 Each extra target is one more class the classifier can confuse, and the signal of the
-cap is weaker than in laboratory recordings: dry electrodes are noisier than gel
-electrodes~\citep{mathewson2017dry}, and the cap has eight channels and no PO
-electrodes, against the 64 gel electrodes of the Benchmark
+cap is weaker than in laboratory recordings: dry electrodes, with their much higher
+impedance, record more noise than wet electrodes~\citep{mathewson2017dry}, and the cap
+has eight channels and no PO electrodes, against the 64 channels of the Benchmark
 dataset~\citep{wang2017benchmark}.
 Even with six targets, the offline accuracy on my pilot recordings is far below that
 on Benchmark at the same window length (\cref{ch:results}).
@@ -336,7 +340,7 @@ Fewer targets also keep the calibration short. \ac{TRCA} needs several training 
 per target: with six targets, ten trials each take about 7 minutes
 (\cref{sec:calibration}), whereas the 40 targets of Benchmark would need 400 trials and
 about 47 minutes, which is too long and tiring for the subject.
-Forty targets between 8 and 15.8\,Hz are also only 0.2\,Hz apart and must be coded by
+Forty targets between 8 and 15.8\,Hz are also only 0.2\,Hz apart and are coded by
 phase as well~\citep{chen2015highspeed}, while six targets can be 1.4\,Hz apart
 (\cref{sec:stimulus}).
 Finally, six large squares fit on a ring around the typed text, while 40 squares on
