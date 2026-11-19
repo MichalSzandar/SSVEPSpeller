@@ -8,14 +8,163 @@
 \chapter{Signal processing and classification}
 \label{ch:processing}
 
+This chapter describes the datasets and the methods I used to process the \ac{EEG} signals
+and classify them into the six targets: the Benchmark dataset~\citep{wang2017benchmark} and
+my own recordings, the preprocessing pipeline (notch filter, band-pass filter, filter bank),
+the classifiers, their implementation, and the evaluation method (cross-validation, accuracy
+and \ac{ITR} against window length, statistical tests). The classifiers are \ac{CCA},
+\ac{FBCCA} and their normalised variants, \ac{TRCA}, \ac{eTRCA} and \ac{FBeTRCA}, and a
+baseline that classifies the \ac{PSD} with \ac{LDA}.
+
 \section{Datasets}
 \label{sec:datasets}
+
+The Benchmark dataset~\citep{wang2017benchmark} consists of 35 subjects, each with six
+blocks of 40 trials, one trial per target in random order. Each trial lasts 6\,s: a 0.5\,s
+cue, during which the subject shifts their gaze to the target, 5\,s of flicker and 0.5\,s of
+blank screen. The \ac{EEG} was recorded with 64 wet electrodes at 1000\,Hz, and the data were
+downsampled to 250\,Hz. The 40 targets are arranged in a 5-by-8 grid and flicker at
+frequencies from 8 to 15.8\,Hz in steps of 0.2\,Hz, with phases from 0 to $1.5\pi$ in steps
+of $0.5\pi$~\citep{chen2015highspeed}. The dataset is publicly available at
+\url{https://bci.med.tsinghua.edu.cn/}. I used the nine parieto-occipital channels Pz, PO5,
+PO3, POz, PO4, PO6, O1, Oz and O2, as \citet{nakanishi2018trca} did, and only the six targets
+at the speller frequencies (\cref{tab:targets}), which lie on the Benchmark grid: 36 trials
+per subject, six per target. The analysis window starts 0.14\,s after the flicker onset, the
+visual latency used by \citet{chen2015highspeed} and \citet{nakanishi2018trca}.
+
+% TODO before submission: this sentence is only true once compare_methods has been run on
+% all 40 Benchmark targets (and all 35 subjects), with the numbers in sec:benchmark.
+To verify my implementations of \ac{CCA}, \ac{FBCCA} and the \ac{TRCA} family, I tested them
+on all 40 targets of the Benchmark dataset and obtained roughly the same accuracies as those
+reported by \citet{nakanishi2018trca} (\cref{sec:benchmark}).
+
+I also recorded my own data with the cap described in \cref{sec:hardware}, in two sessions
+on different days with myself as the subject. Each session followed the calibration protocol
+of \cref{sec:calibration}: ten blocks of six trials, one trial per target in random order.
+Each trial consists of a 2\,s cue and 5\,s of flicker. It is cut into a 6\,s epoch with the
+same layout as a Benchmark epoch: 0.5\,s before the flicker onset, the 5\,s of flicker and
+0.5\,s after it, so the same processing runs on both datasets. The analysis window starts
+0.7\,s after the onset marker instead of 0.14\,s, because in the first session the timestamps
+of the cap ran about 0.5\,s ahead of the markers. A latency of 0.7\,s gave the best accuracy
+in that session and close to the best in the second (\cref{sec:own-recordings}).
 
 \section{Preprocessing}
 \label{sec:preprocessing}
 
+The raw \ac{EEG} signal is noisy. Dry electrodes have a higher impedance than gel electrodes,
+the system uses only eight of the 16 channels of the cap, and the cap has no PO electrodes
+(\cref{sec:hardware}), so the signal quality is lower than
+in laboratory recordings~\citep{mathewson2017dry}. In addition, the recorded signal contains
+activity that is not related to the stimulus: eye blinks and eye movements, muscle activity
+of the face and neck, and the ongoing rhythms of the brain. Filtering removes only the part
+of it that lies outside the band of the \ac{SSVEP}: power-line interference at 50\,Hz, slow
+drifts of the electrode potentials, most of the energy of blinks and eye movements, which is
+concentrated at the lowest frequencies, and noise above the upper edge of the band-pass.
+\missing{citation for the low-frequency spectrum of blinks and eye movements}
+Muscle activity has a broad spectrum, from a few hertz to over 200\,Hz, and is strongest
+between about 20 and 80\,Hz~\citep{goncharova2003emg}, so most of it stays in the filtered
+signal. The alpha rhythm (8--13\,Hz) stays as well, because it overlaps the four lowest
+target frequencies (8.0, 9.4, 10.8 and 12.2\,Hz). What filtering leaves is reduced later by
+the spatial filters of \ac{CCA} and \ac{TRCA}, which weight the channels so that the
+\ac{SSVEP} stands out, and by leaving the noisiest trials and channels out of training.
+
+Each epoch passes through three steps:
+\begin{enumerate}
+    \item A zero-phase notch filter at 50\,Hz (quality factor 30) removes the power-line
+          interference. It is applied only to my own recordings, because the Benchmark data
+          were notch-filtered when they were recorded~\citep{wang2017benchmark}.
+    \item The methods without a filter bank (\ac{CCA}, \ac{TRCA}, \ac{eTRCA}, the baseline
+          and the normalised \ac{CCA}) use a single band-pass filter between 7 and 90\,Hz, a
+          fourth-order Butterworth filter applied forwards and backwards, so with zero phase.
+          The filter-bank methods (\ac{FBCCA}, its normalised variant and \ac{FBeTRCA}) use
+          the filter bank instead: $N_b = 5$ zero-phase Chebyshev type~I band-pass filters,
+          where sub-band~$m$ passes from $(8m - 2)$\,Hz to 90\,Hz, that is from 6, 14, 22, 30
+          and 38\,Hz. The lower edges rise in steps of 8\,Hz, the lowest target frequency, so
+          each higher sub-band leaves out more of the low-frequency content and relies more on
+          the harmonics. The filter design follows the public code of
+          \citet{nakanishi2018trca}.
+    \item The analysis window of length~$T$ is cut out of the filtered epoch, starting at the
+          stimulus onset plus the visual latency. Filtering the longer epoch before cutting
+          keeps the edge effects of the filters outside the window.
+\end{enumerate}
+
 \section{CCA and FBCCA}
 \label{sec:cca}
+
+\ac{CCA}~\citep{lin2006cca} and \ac{FBCCA}~\citep{chen2015fbcca} are widely used for
+\ac{SSVEP} classification. Both measure how strongly the processed \ac{EEG} signal correlates
+with reference signals, which are sine and cosine waves at the target frequency and its
+harmonics. For target~$k$, the reference signals form the matrix
+\begin{equation}
+    \mathbf{Y}_k =
+    \begin{bmatrix}
+        \sin(2\pi f_k \mathbf{t}) \\
+        \cos(2\pi f_k \mathbf{t}) \\
+        \sin(2\pi \cdot 2 f_k \mathbf{t}) \\
+        \cos(2\pi \cdot 2 f_k \mathbf{t}) \\
+        \vdots \\
+        \sin(2\pi N_h f_k \mathbf{t}) \\
+        \cos(2\pi N_h f_k \mathbf{t})
+    \end{bmatrix}
+    \in \mathbb{R}^{2N_h \times N_s},
+    \qquad
+    \mathbf{t} = \left[0, \frac{1}{f_s}, \frac{2}{f_s}, \dots, \frac{N_s - 1}{f_s}\right],
+    \label{eq:cca-references}
+\end{equation}
+where $f_k$ is the frequency of target~$k$, $\mathbf{t}$ is the row vector of sample times,
+$f_s$ is the sampling rate, $N_s = T f_s$ is the number of samples in a window of length~$T$,
+and $N_h$ is the number of harmonics ($N_h = 5$ in this work). The sine and cosine are applied
+element-wise, so each row of $\mathbf{Y}_k$ is one reference signal of length $N_s$.
+One such matrix is generated for each of the $N_t$ targets.
+
+For each target, \ac{CCA} calculates the largest canonical correlation coefficient $\rho_k$
+between $\mathbf{X}$ and $\mathbf{Y}_k$, where $\mathbf{X}$ is the processed \ac{EEG} window
+(one row per channel) and $\mathbf{Y}_k$ is the reference matrix of target~$k$, whose
+frequency is given in \cref{tab:targets}. The target with the highest correlation is selected.
+
+\ac{FBCCA} applies \ac{CCA} to each sub-band of the filter bank (\cref{sec:preprocessing})
+separately and combines the results with a weighted sum. The weight of sub-band~$m$ is
+\begin{equation}
+    w_m = m^{-a} + b,
+    \label{eq:fb-weights}
+\end{equation}
+where $a$ and $b$ are two constants shared by all sub-bands. I used $a = 1.25$ and
+$b = 0.25$, the values that \citet{chen2015fbcca} chose by optimising the accuracy on their
+offline data. The weights are therefore fixed in advance and do not depend on the recorded
+data. The score of each target is the weighted sum of its squared correlations over the
+sub-bands,
+\begin{equation}
+    \begin{bmatrix}
+        \rho_{1,1}^2 & \rho_{1,2}^2 & \dots & \rho_{1,N_b}^2 \\
+        \rho_{2,1}^2 & \rho_{2,2}^2 & \dots & \rho_{2,N_b}^2 \\
+        \vdots & \vdots & \ddots & \vdots \\
+        \rho_{N_t,1}^2 & \rho_{N_t,2}^2 & \dots & \rho_{N_t,N_b}^2
+    \end{bmatrix}
+    \begin{bmatrix}
+        w_1 \\
+        w_2 \\
+        \vdots \\
+        w_{N_b}
+    \end{bmatrix}
+    =
+    \begin{bmatrix}
+        S_1 \\
+        S_2 \\
+        \vdots \\
+        S_{N_t}
+    \end{bmatrix},
+    \label{eq:fbcca-score}
+\end{equation}
+where $\rho_{k,m}$ is the canonical correlation between the \ac{EEG} in sub-band~$m$ and the
+reference signals of target~$k$, and $S_k$ is the score of target~$k$. The target with the
+highest score is selected.
+
+% Point 6 of the review (2026-11-19), still open: the description below does not match the
+% code. NormalizedCCA z-scores each target's score with that target's mean and standard
+% deviation over the calibration trials; it does not divide by the sum over the targets.
+I also implemented normalised variants of \ac{CCA} and \ac{FBCCA}, which normalise the score
+of each target by the sum of the scores of all targets. This helps to reduce the effect of
+noise and improves the classification accuracy.
 
 \section{The TRCA family}
 \label{sec:trca}

@@ -531,7 +531,7 @@ opens an inlet for each of them. The inlet for the \ac{EEG} applies the clock
 synchronisation and the dejittering of \ac{LSL}~\citep{kothe2025lsl}: it converts the
 timestamps of the cap to the local clock and smooths their jitter, which is possible
 because the samples arrive at a regular rate. The inlet for the markers applies only
-the clock synchronisation, because markers are irregular. On top of the inlets, the
+the clock synchronisation, because the markers are irregular. On top of the inlets, the
 layer provides a ring buffer, which keeps the last 30\,s of \ac{EEG} with their
 timestamps and returns the samples from a given time on, and a recorder, which keeps
 everything both inlets deliver. The layer works the same way with the cap and with the
