@@ -159,26 +159,35 @@ where $\rho_{k,m}$ is the canonical correlation between the \ac{EEG} in sub-band
 reference signals of target~$k$, and $S_k$ is the score of target~$k$. The target with the
 highest score is selected.
 
-% Point 6 of the review (2026-11-19), still open: the description below does not match the
-% code. NormalizedCCA z-scores each target's score with that target's mean and standard
-% deviation over the calibration trials; it does not divide by the sum over the targets.
-I also implemented normalised variants of \ac{CCA} and \ac{FBCCA}, which normalise the score
-of each target by the sum of the scores of all targets. This helps to reduce the effect of
-noise and improves the classification accuracy.
+I also implemented normalised variants of \ac{CCA} and \ac{FBCCA}. Background \ac{EEG}
+activity, such as the alpha rhythm and the rising power towards low frequencies, correlates
+more strongly with the reference signals of the low target frequencies, so on noisy data plain
+\ac{CCA} tends to select the low-frequency targets. The normalised variants therefore put the
+scores of all targets on the same scale. From the training trials, they compute the mean
+$\mu_k$ and the standard deviation $\sigma_k$ of the score of each target~$k$, and a test
+window is classified with the standardised scores
+\begin{equation}
+    \tilde{S}_k = \frac{S_k - \mu_k}{\sigma_k},
+    \label{eq:normalised-score}
+\end{equation}
+where $S_k$ is the score of target~$k$: the canonical correlation $\rho_k$ for \ac{CCA} and the
+weighted sum of \cref{eq:fbcca-score} for \ac{FBCCA}. The target with the highest
+$\tilde{S}_k$ is selected. Unlike plain \ac{CCA} and \ac{FBCCA}, the normalised variants
+need calibration data, and their training windows must have the same length as the test
+windows, because the correlations depend on the window length.
 
 \section{The TRCA family}
 \label{sec:trca}
 
-The TRCA family of methods was originally proposed by \citet{tanaka2013trca} for \ac{NIRS} 
-and later applied to \ac{SSVEP} by \citet{nakanishi2018trca}. Unlike \ac{CCA}, which compares 
-the \ac{EEG} with artificial sine waves and does not require training, \ac{TRCA} learns 
+The \ac{TRCA} family of methods was originally proposed by \citet{tanaka2013trca} for \ac{NIRS}
+and later applied to \ac{SSVEP} by \citet{nakanishi2018trca}. Unlike \ac{CCA}, which compares
+the \ac{EEG} with artificial sine waves and does not require training, \ac{TRCA} learns
 from a set of calibration trials gathered from the user before the online experiment.
-The key idea behind \ac{TRCA} is that the \ac{SSVEP} response is time-locked to the stimulus, 
-so that means that every trial of a given target should have the same waveform and phase, 
-wheras other sources of noise such as alpha rhythms, muscle activity, and eye blinks differ 
-from trial to trial. Therefore, \ac{TRCA} seeks to find a spatial filter that maximizes the 
-similarity of the trials for each target, effectively enhancing the \ac{SSVEP} signal while 
-suppressing noise.
+The key idea behind \ac{TRCA} is that the \ac{SSVEP} response is time-locked to the stimulus,
+so every trial of a given target should have the same waveform and phase, whereas other
+sources of noise, such as the alpha rhythm, muscle activity and eye blinks, differ from trial
+to trial. Therefore, \ac{TRCA} seeks a spatial filter that maximises the similarity of the
+trials of each target, which enhances the \ac{SSVEP} and suppresses the noise.
 
 The spatial filter of \ac{TRCA} is computed for each target separately. 
 Let $\mathbf{X}_k^{(h)} \in \mathbb{R}^{N_c \times N_s}$ be the $h$-th training trial of 
@@ -186,16 +195,14 @@ target~$k$, with the mean of each channel removed, where $N_c$ is the number of 
 and $N_s$ is the number of samples in the analysis window. 
 The filter $\mathbf{w}_k \in \mathbb{R}^{N_c}$ has one weight per channel, and the filtered 
 trial is $\mathbf{w}_k^\top \mathbf{X}_k^{(h)}$, a single time series. The matrices
-
 \begin{equation}
-    \mathbf{C}_k = \sum_{h_1 \neq h_2} \mathbf{X}_k^{(h_1)} \mathbf{X}_k^{(h_2)\top},
-    \qquad
-    \mathbf{Q}_k = \sum_{h=1}^{N_\mathrm{tr}} \mathbf{X}_k^{(h)} \mathbf{X}_k^{(h)\top},
+    \mathbf{C}_k = \sum_{h_1 \neq h_2} \mathbf{X}_k^{(h_1)} \mathbf{X}_k^{(h_2)\top}
+    \qquad \text{and} \qquad
+    \mathbf{Q}_k = \sum_{h=1}^{N_\mathrm{tr}} \mathbf{X}_k^{(h)} \mathbf{X}_k^{(h)\top}
     \label{eq:trca-matrices}
 \end{equation}
-
 represent the agreement of the filtered trials and their total variance, respectively.
-
+The filter of target~$k$ is the one that maximises the ratio of the two:
 \begin{equation}
     \mathbf{w}_k = \operatorname*{arg\,max}_{\mathbf{w}}
     \frac{\mathbf{w}^\top \mathbf{C}_k \mathbf{w}}{\mathbf{w}^\top \mathbf{Q}_k \mathbf{w}}.
@@ -206,8 +213,9 @@ The solution of \cref{eq:trca-objective} is the eigenvector of $\mathbf{Q}_k^{-1
 with the largest eigenvalue~\citep{nakanishi2018trca}. The filter $\mathbf{w}_k$ is computed 
 for each target~$k$, resulting in $N_t$ filters in total.
 
-The TRCA template of target~$k$ is the mean of its training trials, because averaging cancels 
-the noise and leaves the time-locked \ac{SSVEP} response. 
+The \ac{TRCA} template of target~$k$ is the mean of its training trials, because averaging
+cancels the noise and leaves the time-locked \ac{SSVEP} response. A test window is classified
+by filtering it and each template with the filter of that target and correlating the results:
 \begin{equation}
     \bar{\mathbf{X}}_k = \frac{1}{N_\mathrm{tr}} \sum_{h=1}^{N_\mathrm{tr}} \mathbf{X}_k^{(h)},
     \qquad
@@ -215,16 +223,20 @@ the noise and leaves the time-locked \ac{SSVEP} response.
                                       \mathbf{w}_k^\top \bar{\mathbf{X}}_k\right),
     \label{eq:trca-score}
 \end{equation}
-where $\mathbf{X}$ is the test window, and $\rho_k$ is the Pearson correlation coefficient between 
-the filtered test window and the filtered template of target~$k$. The target with the highest 
-correlation is selected. It works on short windows because the template is the user's own averaged response, with its real waveform,
-harmonics, phase and latency, not a pure sine wave.
+where $\mathbf{X}$ is the test window and $\operatorname{corr}$ is the Pearson correlation
+coefficient. Here $\rho_k$ is therefore the correlation between the filtered test window and
+the filtered template of target~$k$, not a canonical correlation as in \cref{sec:cca}. The
+target with the highest correlation is selected. The template is the user's own averaged
+response, with its real waveform, harmonics, phase and latency, not a pure sine wave, which is
+why \ac{TRCA} works well even with short windows~\citep{nakanishi2018trca}.
 
-The problem with \ac{TRCA} is that each filter is learnt from only a few training trials, so it contains noise.
-\ac{eTRCA} adresses this issue by using the fact that the \ac{SSVEP} responses of all targets come from the same 
-area of the visual cortex, so their filters should be similar. It learns all $N_t$ filters at once, 
-by maximising the sum of the correlations of all pairs of filtered trials of all targets~\citep{nakanishi2018trca}. 
-The resulting filters are less noisy and give a higher accuracy than \ac{TRCA}.
+The problem with \ac{TRCA} is that each filter is learnt from only a few training trials, so
+it contains noise. \ac{eTRCA}~\citep{nakanishi2018trca} addresses this issue by using the fact
+that the \ac{SSVEP} responses of all targets come from the same area of the visual cortex, so
+their filters should be similar. It learns the filters exactly as \ac{TRCA} does, one for each
+target from the trials of that target, and combines them only in the classification: the test
+window and each template are filtered with all $N_t$ filters at once, and the score of
+target~$k$ is the correlation between the two filtered signals,
 \begin{equation}
     \mathbf{W} = \left[\mathbf{w}_1, \mathbf{w}_2, \dots, \mathbf{w}_{N_t}\right]
     \in \mathbb{R}^{N_c \times N_t},
@@ -233,20 +245,28 @@ The resulting filters are less noisy and give a higher accuracy than \ac{TRCA}.
                                       \operatorname{vec}(\mathbf{W}^\top \bar{\mathbf{X}}_k)\right),
     \label{eq:etrca-score}
 \end{equation}
-where $\mathbf{W}$ is the matrix of all $N_t$ filters, and $\operatorname{vec}$ stacks the rows of a matrix into one vector.
+where $\mathbf{W}$ is the matrix of all $N_t$ filters, so $\mathbf{W}^\top \mathbf{X}$ has one
+row per filter, and $\operatorname{vec}$ joins the rows of a matrix into one vector. The
+filters themselves are the same as in \ac{TRCA}, but a noisy filter has less influence on the
+combined score, and \citet{nakanishi2018trca} report a higher accuracy for \ac{eTRCA} than for
+\ac{TRCA}.
 
-FB-eTRCA is yet another extension of \ac{TRCA} that combines \ac{eTRCA} with the filter bank of \ac{FBCCA}.
-It runs \ac{eTRCA} in each of the $N_b$ sub-bands of the filter bank, with its own filters and templates per sub-band, and combines the scores
-with the weights of \cref{eq:fb-weights}:
+\ac{FBeTRCA}~\citep{nakanishi2018trca} combines \ac{eTRCA} with the filter bank of
+\cref{sec:preprocessing}. It runs \ac{eTRCA} in each of the $N_b$ sub-bands, with its own
+filters and templates per sub-band, and combines the scores with the weights of
+\cref{eq:fb-weights}:
 \begin{equation}
     S_k = \sum_{m=1}^{N_b} w_m \, \rho_{k,m},
     \label{eq:fbetrca-score}
 \end{equation}
-where $\rho_{k,m}$ is the \ac{eTRCA} correlation of target~$k$ in sub-band~$m$, and $S_k$ is the score of target~$k$.
-Contrary to \ac{FBCCA}, the correlations are not squared, because a negative correlation is evidence against the target, 
-and squaring it would turn it into evidence for it. The target with the highest score is selected.
+where $\rho_{k,m}$ is the \ac{eTRCA} correlation of target~$k$ in sub-band~$m$, and $S_k$ is
+the score of target~$k$. Unlike in \ac{FBCCA} (\cref{eq:fbcca-score}), the correlations are
+not squared, because a negative correlation, a response in antiphase with the template, is
+evidence against the target, and squaring it would turn it into evidence for it. A canonical
+correlation is never negative, so squaring loses nothing there. The target with the highest
+score is selected.
 
-TRCA and its extensions need calibration data from the same session, because training on another session 
+\ac{TRCA} and its extensions need calibration data from the same session, because training on another session 
 lowered the accuracy of \ac{eTRCA} in my pilot recordings. They also need at least two training 
 trials per target, because \ac{TRCA} cannot compute a filter with only one trial. Finally, 
 they require test windows of the same length and start as the training windows, and precise onset 
@@ -330,11 +350,11 @@ evaluation, $T_\mathrm{sel} = T + 0.5$\,s: the window length plus the 0.5\,s gaz
 speller (\cref{sec:online}). In the online experiment, $T_\mathrm{sel}$ is the measured time
 from one selection to the next (\cref{sec:online-results}).
 
-To make sure that classifiers were not tested on the same trials they were trained on, I 
-used leave-one-block-out cross-validation: one block of trials is left out for testing, 
-and the classifier is trained on the remaining blocks. This is repeated for every block, 
-and the accuracy is mean over all folds. In this context a block is a set of 6 trials, one per target, 
-and a fold is one iteration of the cross-validation.
+To make sure that the classifiers are not tested on the same trials they were trained on, I
+used leave-one-block-out cross-validation: one block of trials is left out for testing,
+and the classifier is trained on the remaining blocks. This is repeated for every block,
+and the accuracy is the mean over all folds. In this context a block is a set of six trials,
+one per target, and a fold is one iteration of the cross-validation.
 
 Before a classifier is fitted, its training trials pass through artifact rejection. During
 some trials an electrode may lose contact with the scalp, or the user may blink or move, and
@@ -366,6 +386,14 @@ training trials are checked: every test trial is classified, because in the onli
 experiment a selection cannot be skipped either. The same step is applied when the online
 classifier is fitted on the calibration data.
 
-To determine the best window length for each method, I evaluated the accuracy and \ac{ITR} 
-for window lengths from 0.5 to 5\,s in steps of 0.5\,s using window-sweeping: the window 
-starts at the stimulus onset and ends at 0.5, 1.0, 1.5, \dots, 5.0\,s.
+To determine the best window length for each method, I repeated the whole leave-one-block-out
+evaluation for a range of window lengths, cutting windows of different lengths out of the same
+trials. Every window starts at the stimulus onset plus the visual latency, 0.14\,s for the
+Benchmark dataset and 0.7\,s for my recordings (\cref{sec:datasets}). For the Benchmark
+dataset, the window lengths are 0.25 to 2\,s in steps of 0.25\,s. For my recordings, they are
+0.5 to 3\,s in steps of 0.5\,s, and 4\,s: a window that starts 0.7\,s after the onset must end
+before the flicker stops 5\,s after it, so it can be at most 4.3\,s long. A longer window
+contains more cycles of the stimulus, so the accuracy rises with the window length, but so
+does the time per selection $T_\mathrm{sel} = T + 0.5$\,s. The \ac{ITR} therefore peaks at an
+intermediate window length, and I take the window with the highest \ac{ITR} as the best window
+of a method.
