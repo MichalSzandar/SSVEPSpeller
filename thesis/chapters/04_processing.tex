@@ -169,8 +169,203 @@ noise and improves the classification accuracy.
 \section{The TRCA family}
 \label{sec:trca}
 
+The TRCA family of methods was originally proposed by \citet{tanaka2013trca} for \ac{NIRS} 
+and later applied to \ac{SSVEP} by \citet{nakanishi2018trca}. Unlike \ac{CCA}, which compares 
+the \ac{EEG} with artificial sine waves and does not require training, \ac{TRCA} learns 
+from a set of calibration trials gathered from the user before the online experiment.
+The key idea behind \ac{TRCA} is that the \ac{SSVEP} response is time-locked to the stimulus, 
+so that means that every trial of a given target should have the same waveform and phase, 
+wheras other sources of noise such as alpha rhythms, muscle activity, and eye blinks differ 
+from trial to trial. Therefore, \ac{TRCA} seeks to find a spatial filter that maximizes the 
+similarity of the trials for each target, effectively enhancing the \ac{SSVEP} signal while 
+suppressing noise.
+
+The spatial filter of \ac{TRCA} is computed for each target separately. 
+Let $\mathbf{X}_k^{(h)} \in \mathbb{R}^{N_c \times N_s}$ be the $h$-th training trial of 
+target~$k$, with the mean of each channel removed, where $N_c$ is the number of channels 
+and $N_s$ is the number of samples in the analysis window. 
+The filter $\mathbf{w}_k \in \mathbb{R}^{N_c}$ has one weight per channel, and the filtered 
+trial is $\mathbf{w}_k^\top \mathbf{X}_k^{(h)}$, a single time series. The matrices
+
+\begin{equation}
+    \mathbf{C}_k = \sum_{h_1 \neq h_2} \mathbf{X}_k^{(h_1)} \mathbf{X}_k^{(h_2)\top},
+    \qquad
+    \mathbf{Q}_k = \sum_{h=1}^{N_\mathrm{tr}} \mathbf{X}_k^{(h)} \mathbf{X}_k^{(h)\top},
+    \label{eq:trca-matrices}
+\end{equation}
+
+represent the agreement of the filtered trials and their total variance, respectively.
+
+\begin{equation}
+    \mathbf{w}_k = \operatorname*{arg\,max}_{\mathbf{w}}
+    \frac{\mathbf{w}^\top \mathbf{C}_k \mathbf{w}}{\mathbf{w}^\top \mathbf{Q}_k \mathbf{w}}.
+    \label{eq:trca-objective}
+\end{equation}
+
+The solution of \cref{eq:trca-objective} is the eigenvector of $\mathbf{Q}_k^{-1} \mathbf{C}_k$ 
+with the largest eigenvalue~\citep{nakanishi2018trca}. The filter $\mathbf{w}_k$ is computed 
+for each target~$k$, resulting in $N_t$ filters in total.
+
+The TRCA template of target~$k$ is the mean of its training trials, because averaging cancels 
+the noise and leaves the time-locked \ac{SSVEP} response. 
+\begin{equation}
+    \bar{\mathbf{X}}_k = \frac{1}{N_\mathrm{tr}} \sum_{h=1}^{N_\mathrm{tr}} \mathbf{X}_k^{(h)},
+    \qquad
+    \rho_k = \operatorname{corr}\left(\mathbf{w}_k^\top \mathbf{X},\,
+                                      \mathbf{w}_k^\top \bar{\mathbf{X}}_k\right),
+    \label{eq:trca-score}
+\end{equation}
+where $\mathbf{X}$ is the test window, and $\rho_k$ is the Pearson correlation coefficient between 
+the filtered test window and the filtered template of target~$k$. The target with the highest 
+correlation is selected. It works on short windows because the template is the user's own averaged response, with its real waveform,
+harmonics, phase and latency, not a pure sine wave.
+
+The problem with \ac{TRCA} is that each filter is learnt from only a few training trials, so it contains noise.
+\ac{eTRCA} adresses this issue by using the fact that the \ac{SSVEP} responses of all targets come from the same 
+area of the visual cortex, so their filters should be similar. It learns all $N_t$ filters at once, 
+by maximising the sum of the correlations of all pairs of filtered trials of all targets~\citep{nakanishi2018trca}. 
+The resulting filters are less noisy and give a higher accuracy than \ac{TRCA}.
+\begin{equation}
+    \mathbf{W} = \left[\mathbf{w}_1, \mathbf{w}_2, \dots, \mathbf{w}_{N_t}\right]
+    \in \mathbb{R}^{N_c \times N_t},
+    \qquad
+    \rho_k = \operatorname{corr}\left(\operatorname{vec}(\mathbf{W}^\top \mathbf{X}),\,
+                                      \operatorname{vec}(\mathbf{W}^\top \bar{\mathbf{X}}_k)\right),
+    \label{eq:etrca-score}
+\end{equation}
+where $\mathbf{W}$ is the matrix of all $N_t$ filters, and $\operatorname{vec}$ stacks the rows of a matrix into one vector.
+
+FB-eTRCA is yet another extension of \ac{TRCA} that combines \ac{eTRCA} with the filter bank of \ac{FBCCA}.
+It runs \ac{eTRCA} in each of the $N_b$ sub-bands of the filter bank, with its own filters and templates per sub-band, and combines the scores
+with the weights of \cref{eq:fb-weights}:
+\begin{equation}
+    S_k = \sum_{m=1}^{N_b} w_m \, \rho_{k,m},
+    \label{eq:fbetrca-score}
+\end{equation}
+where $\rho_{k,m}$ is the \ac{eTRCA} correlation of target~$k$ in sub-band~$m$, and $S_k$ is the score of target~$k$.
+Contrary to \ac{FBCCA}, the correlations are not squared, because a negative correlation is evidence against the target, 
+and squaring it would turn it into evidence for it. The target with the highest score is selected.
+
+TRCA and its extensions need calibration data from the same session, because training on another session 
+lowered the accuracy of \ac{eTRCA} in my pilot recordings. They also need at least two training 
+trials per target, because \ac{TRCA} cannot compute a filter with only one trial. Finally, 
+they require test windows of the same length and start as the training windows, and precise onset 
+markers: trials that are not aligned in time blur the template and reduce the correlation with the test window.
+
 \section{Baseline}
 \label{sec:baseline}
 
+In order to compare \ac{CCA} and \ac{TRCA} with a simpler approach, I implemented a baseline classifier
+that uses the \ac{PSD} of the \ac{EEG} signal as features and classifies them with \ac{LDA}.
+The \ac{PSD} is estimated with Welch's method~\citep{welch1967psd}, which here uses a single segment: the whole
+window. The estimate is therefore a periodogram of the whole window multiplied by a Hann
+window, with no overlapping segments and no averaging. The window is zero-padded to a length
+of 10\,s (2500 samples), so the frequencies of the periodogram lie on a 0.1\,Hz grid. Without
+padding they would be $f_s / N_s$ apart, for example 1\,Hz for a 1\,s window, and would miss
+most target frequencies. With padding, every target frequency and its harmonics, which are all
+multiples of 0.1\,Hz, fall on the grid.
+I chose to use the Hann-window periodogram instead of the multitaper method~\citep{thomson1982multitaper}, because it is simpler and faster to compute,
+and it provides sufficient frequency resolution for the target frequencies and their harmonics.
+
+The logarithms of the \ac{PSD} at the target frequencies and their harmonics are the input
+features of the \ac{LDA} classifier. I use the logarithm because the logarithm of the power is
+closer to a normal distribution than the power itself~\citep{gasser1982normal}, and \ac{LDA}
+assumes normally distributed features.
+
+The baseline uses only the fundamental and the second harmonic of each target. Each trial
+therefore gives a feature vector of length $2 N_t N_c$: the log power at each of the $N_t$
+target frequencies and at its second harmonic, in each of the $N_c$ channels. That is 96
+features for my recordings and 108 for the Benchmark dataset.
+
+\ac{LDA} assumes that the features of every target are normally distributed with the same
+covariance matrix, and it separates the targets with linear decision boundaries computed from
+the means of the targets and this covariance matrix. Each fold of the cross-validation
+(\cref{sec:evaluation}) has at most 54 training trials for my recordings and 30 for Benchmark,
+fewer than the number of features. With fewer trials than features, the sample covariance
+matrix $\hat{\bm{\Sigma}}$ is singular and cannot be inverted. I therefore use shrinkage
+\ac{LDA}~\citep{blankertz2011erp}, which replaces $\hat{\bm{\Sigma}}$ with
+\begin{equation}
+    \tilde{\bm{\Sigma}} = (1 - \gamma)\,\hat{\bm{\Sigma}} + \gamma \nu \mathbf{I},
+    \qquad
+    \nu = \frac{\operatorname{tr}(\hat{\bm{\Sigma}})}{d},
+    \label{eq:shrinkage}
+\end{equation}
+where $d = 2 N_t N_c$ is the number of features, $\mathbf{I}$ is the identity matrix and $\nu$
+is the average variance of the features. The shrunk matrix $\tilde{\bm{\Sigma}}$ can always be
+inverted. The shrinkage parameter $\gamma \in [0, 1]$ is computed from the training trials with
+the analytical formula of \citet{ledoit2004shrinkage}, so it needs no extra cross-validation.
+Shrinking towards $\nu \mathbf{I}$ treats all features alike only if they have the same scale.
+Before \ac{LDA}, every feature is therefore standardised: its mean is subtracted and it is
+divided by its standard deviation, both computed on the training trials only. Both steps use
+the implementations in scikit-learn~\citep{pedregosa2011sklearn}.
+
+I use this method as a baseline because, unlike \ac{CCA} and \ac{TRCA}, it has no spatial
+filter: every channel gives its own features. Unlike \ac{TRCA}, it also ignores the phase and
+the waveform of the response and uses only the power at the target frequencies.
+
 \section{Evaluation method}
 \label{sec:evaluation}
+
+The basic measure of a classifier is its accuracy: the proportion of trials in which it selects
+the correct target. A classifier that guesses at random selects the correct one of the six
+targets in 1/6 of the trials, so the chance level is about 16.7\,\%.
+
+The main measure is the \ac{ITR}~\citep{wolpaw2002bci}: the amount of information, in bits,
+that the user can transmit per minute. It combines the accuracy and the speed of the system in
+one number, and it is the usual measure for comparing \ac{SSVEP}
+spellers~\citep{chen2015highspeed,nakanishi2018trca}. The number of bits per selection is
+\begin{equation}
+    B = \log_2 N_t + P \log_2 P + (1 - P) \log_2\left(\frac{1 - P}{N_t - 1}\right),
+    \label{eq:bits}
+\end{equation}
+where $N_t$ is the number of targets and $P$ is the accuracy, and the \ac{ITR} in bits per
+minute is
+\begin{equation}
+    \mathrm{ITR} = \frac{60\,B}{T_\mathrm{sel}},
+    \label{eq:itr}
+\end{equation}
+where $T_\mathrm{sel}$ is the time per selection in seconds. For $P = 1$, the number of bits is
+$B = \log_2 N_t$, and at or below the chance level the \ac{ITR} is set to zero. In the offline
+evaluation, $T_\mathrm{sel} = T + 0.5$\,s: the window length plus the 0.5\,s gaze shift of the
+speller (\cref{sec:online}). In the online experiment, $T_\mathrm{sel}$ is the measured time
+from one selection to the next (\cref{sec:online-results}).
+
+To make sure that classifiers were not tested on the same trials they were trained on, I 
+used leave-one-block-out cross-validation: one block of trials is left out for testing, 
+and the classifier is trained on the remaining blocks. This is repeated for every block, 
+and the accuracy is mean over all folds. In this context a block is a set of 6 trials, one per target, 
+and a fold is one iteration of the cross-validation.
+
+Before a classifier is fitted, its training trials pass through artifact rejection. During
+some trials an electrode may lose contact with the scalp, or the user may blink or move, and
+the signal then contains large swings that are not related to the stimulus. A few such trials
+can distort what a classifier learns from the training data, for example the templates of
+\ac{TRCA} or the covariance matrix of \ac{LDA}, so the worst channels and trials are left out
+of training. The checks work on the filtered and cropped window (for the filter-bank methods,
+on the first sub-band). Both are relative: each signal is compared with the median of the
+same training data, not with a fixed limit in microvolts, so the same thresholds work for the
+dry electrodes of the cap and for the wet electrodes of the Benchmark dataset. The median is
+used because a few artifact trials hardly change it.
+\begin{itemize}
+    \item \textbf{Channel check.} The level of a channel is the median, over the training
+          trials, of its standard deviation within a trial. A channel whose level is more than
+          three times, or less than one third of, the median level of all channels is dropped.
+          This removes an electrode that is noisy or flat for the whole session, and the
+          classifier then uses only the remaining channels, both in training and in testing.
+    \item \textbf{Trial check.} On the remaining channels, the peak-to-peak amplitude of each
+          channel in a trial is divided by the median peak-to-peak amplitude of that channel
+          over the training trials. The ratio of a trial is the largest ratio of its channels,
+          so a single broken electrode is enough to flag the trial. A trial whose ratio is
+          above five is left out of training. At least two trials of each target are always
+          kept, the ones with the lowest ratios, because \ac{TRCA} needs at least two trials
+          per target.
+\end{itemize}
+I set both thresholds high, so that only gross artifacts such as a lost contact are removed,
+not the normal variation between trials (\cref{sec:benchmark,sec:own-recordings}). Only the
+training trials are checked: every test trial is classified, because in the online
+experiment a selection cannot be skipped either. The same step is applied when the online
+classifier is fitted on the calibration data.
+
+To determine the best window length for each method, I evaluated the accuracy and \ac{ITR} 
+for window lengths from 0.5 to 5\,s in steps of 0.5\,s using window-sweeping: the window 
+starts at the stimulus onset and ends at 0.5, 1.0, 1.5, \dots, 5.0\,s.
