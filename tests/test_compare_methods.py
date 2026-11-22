@@ -103,3 +103,57 @@ def test_recording_mode_needs_files():
     """--data recording without --recordings stops with a usage error."""
     with pytest.raises(SystemExit):
         compare_methods.main(["--data", "recording"])
+
+
+def test_benchmark_with_all_targets_loads_and_scores_all_40(monkeypatch):
+    """--targets all passes the 40 Benchmark frequencies to load_benchmark and yields
+    them; the default passes the six speller frequencies."""
+    all_freqs = [round(8.0 + 0.2 * i, 1) for i in range(40)]
+    monkeypatch.setattr(compare_methods, "benchmark_freqs", lambda: all_freqs)
+    asked = []
+
+    def fake_load(subject, freqs):
+        asked.append(list(freqs))
+        n = len(freqs)
+        return np.zeros((n, 9, 1500)), np.arange(n), np.zeros(n)
+
+    monkeypatch.setattr(compare_methods, "load_benchmark", fake_load)
+    for targets, expected in [("all", all_freqs), ("speller", config.TARGET_FREQS)]:
+        args = SimpleNamespace(
+            data="benchmark", subjects=[4], latency=None, targets=targets
+        )
+        ((subject, X, y, _, _, freqs, _, _),) = compare_methods.load_dataset(args)
+        assert subject == "S4"
+        assert freqs == expected
+        assert asked[-1] == expected
+        assert len(y) == len(expected)
+
+
+def test_benchmark_freqs_reads_the_dataset_order(monkeypatch):
+    """Frequencies come out in Freq_Phase.mat order, rounded to 0.1 Hz."""
+    monkeypatch.setattr(
+        compare_methods,
+        "loadmat",
+        lambda path: {"freqs": np.array([[8.0, 9.000001, 8.2]])},
+    )
+    assert compare_methods.benchmark_freqs() == [8.0, 9.0, 8.2]
+
+
+def test_all_targets_needs_benchmark_data():
+    with pytest.raises(SystemExit):
+        compare_methods.main(["--data", "synthetic", "--targets", "all"])
+
+
+def test_plot_without_title(tmp_path):
+    """title=False (thesis figures) still writes the figure."""
+    df = pd.DataFrame(
+        {
+            "subject": ["S1", "S1"],
+            "method": ["CCA", "CCA"],
+            "window": [0.5, 1.0],
+            "accuracy": [0.5, 0.8],
+            "itr": [10.0, 20.0],
+        }
+    )
+    compare_methods.plot_results(df, tmp_path / "f.png", chance=1 / 6, title=False)
+    assert (tmp_path / "f.png").stat().st_size > 0

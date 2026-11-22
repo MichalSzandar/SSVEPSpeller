@@ -874,3 +874,35 @@ def test_main_with_fusion_reuses_the_suggesters_vocabulary(tmp_path, monkeypatch
     backend = run_main_until_serving(tmp_path, monkeypatch, "--nlp", kind, "--fusion")
     assert backend.fusion.vocabulary is vocabulary
     assert len(list((tmp_path / "logs").glob(f"S9_*_{kind}-fusion_backend.csv"))) == 1
+
+
+def test_main_saves_the_run_settings_next_to_the_log(tmp_path, monkeypatch):
+    """<log>.json holds the options the analysis needs (the log alone doesn't say
+    them), written even if the run stops at once."""
+    monkeypatch.setattr(config, "RECORDINGS_DIR", tmp_path / "logs")
+    write_calibration(tmp_path / "calibration.npz")
+
+    def interrupted(backend, eeg_type, eeg_name):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(online, "serve", interrupted)
+    online.main(
+        main_args(
+            tmp_path / "calibration.npz",
+            "--latency",
+            "0.6",
+            "--phrases",
+            "never too rich",
+            "the sum",
+            "--cue",
+        )
+    )
+    (settings_path,) = (tmp_path / "logs").glob("S9_*_none_backend.json")
+    settings = json.loads(settings_path.read_text())
+    assert settings["method"] == "CCA"
+    assert settings["window"] == WINDOW
+    assert settings["latency"] == 0.6
+    assert settings["calibration"] == [str(tmp_path / "calibration.npz")]
+    assert settings["phrases"] == ["never too rich", "the sum"]
+    assert settings["nlp"] == "none" and settings["fusion"] is False
+    assert settings["cue"] is True and settings["replay"] is None

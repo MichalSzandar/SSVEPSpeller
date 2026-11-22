@@ -3,6 +3,7 @@
 Usage:
     .venv/bin/python scripts/compare_methods.py --data synthetic
     .venv/bin/python scripts/compare_methods.py --data benchmark --subjects 1 2 3
+    .venv/bin/python scripts/compare_methods.py --data benchmark --targets all --subjects 1 2 3
     .venv/bin/python scripts/compare_methods.py --data recording --recordings data/recordings/*.npz
 
 Output: results/<name>.csv (one row per subject x method x window) and
@@ -15,6 +16,9 @@ Every method is wrapped in preprocessing.RejectArtifacts: bad channels and bad t
 are left out of each training fold (thresholds --trial-ratio, --channel-ratio; 0
 switches a step off), and every test trial is classified. Own recordings are scored
 with the frequencies they were recorded with (their session_start marker).
+
+--targets all (Benchmark only) uses all 40 Benchmark targets instead of the six speller
+frequencies, to compare the implementations with published 40-target results.
 """
 
 import argparse
@@ -28,6 +32,8 @@ import pandas as pd
 from ssvep import config
 from ssvep.baseline import make_psd_lda
 from ssvep.cca import CCA, NormalizedCCA
+from scipy.io import loadmat
+
 from ssvep.datasets import (
     load_benchmark,
     load_recording,
@@ -95,6 +101,20 @@ INK, INK_SECONDARY, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 SYNTHETIC_PRE = 0.5  # s, noise before the synthetic SSVEP starts
 
 
+def benchmark_freqs() -> list[float]:
+    """All 40 Benchmark target frequencies (Freq_Phase.mat), in dataset order."""
+    mat = loadmat(config.BENCHMARK_DIR / "Freq_Phase.mat")
+    return [round(float(f), 1) for f in np.ravel(mat["freqs"])]
+
+
+def target_freqs(args) -> list[float]:
+    """Target frequencies of --data benchmark: all 40 with --targets all, otherwise
+    config.TARGET_FREQS (also for synthetic data)."""
+    if args.data == "benchmark" and getattr(args, "targets", "speller") == "all":
+        return benchmark_freqs()
+    return config.TARGET_FREQS
+
+
 def load_dataset(args):
     """Yield (subject_name, X, y, blocks, channels, freqs, fs, start) for every subject.
 
@@ -121,15 +141,16 @@ def load_dataset(args):
     latency = config.BENCHMARK_LATENCY if args.latency is None else args.latency
     start = config.BENCHMARK_ONSET + latency
     if args.data == "benchmark":
+        freqs = target_freqs(args)
         for subject in args.subjects:
-            X, y, blocks = load_benchmark(subject)
+            X, y, blocks = load_benchmark(subject, freqs=freqs)
             yield (
                 f"S{subject}",
                 X,
                 y,
                 blocks,
                 config.BENCHMARK_CHANNELS,
-                config.TARGET_FREQS,
+                freqs,
                 config.BENCHMARK_FS,
                 start,
             )
@@ -231,12 +252,13 @@ def compare(datasets, methods, windows, trial_ratio=None, channel_ratio=None):
     return pd.concat(tables, ignore_index=True)
 
 
-def plot_results(df, path, chance=None, note=""):
+def plot_results(df, path, chance=None, note="", title=True):
     """Two panels, accuracy vs. window and ITR vs. window, one line per method.
 
     Lines are means over subjects, bands ± SEM (only with more than one subject).
     ``chance`` draws the chance level on the accuracy panel; ``note`` is appended to
-    the title (e.g. how training data was cleaned).
+    the title (e.g. how training data was cleaned). ``title=False`` leaves the title
+    out (thesis figures, where the caption says it).
     """
     n_subjects = df["subject"].nunique()
     style = {
@@ -306,14 +328,15 @@ def plot_results(df, path, chance=None, note=""):
             frameon=False,
             handlelength=3,  # long enough to show the dashes of a normalised variant
         )
-        subjects = f"{n_subjects} subject{'s' if n_subjects > 1 else ''}"
-        spread = ", mean ± SEM" if n_subjects > 1 else ""
-        fig.suptitle(
-            f"Leave-one-block-out, {subjects}{spread}; "
-            f"ITR includes a {config.GAZE_SHIFT:g} s gaze shift{note}",
-            color=INK_SECONDARY,
-            fontsize="medium",
-        )
+        if title:
+            subjects = f"{n_subjects} subject{'s' if n_subjects > 1 else ''}"
+            spread = ", mean ± SEM" if n_subjects > 1 else ""
+            fig.suptitle(
+                f"Leave-one-block-out, {subjects}{spread}; "
+                f"ITR includes a {config.GAZE_SHIFT:g} s gaze shift{note}",
+                color=INK_SECONDARY,
+                fontsize="medium",
+            )
         fig.savefig(path, dpi=200, facecolor="white")
         plt.close(fig)
 
@@ -339,6 +362,12 @@ def main(argv=None):
         "--data", choices=["synthetic", "benchmark", "recording"], default="synthetic"
     )
     parser.add_argument("--subjects", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument(
+        "--targets",
+        choices=["speller", "all"],
+        default="speller",
+        help="Benchmark targets: the six speller frequencies, or all 40",
+    )
     parser.add_argument("--recordings", nargs="+", default=[])
     parser.add_argument(
         "--windows",
@@ -376,6 +405,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.data == "recording" and not args.recordings:
         parser.error("--data recording needs --recordings")
+    if args.targets == "all" and args.data != "benchmark":
+        parser.error("--targets all needs --data benchmark")
 
     name = args.name or f"compare_{args.data}"
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -391,7 +422,7 @@ def main(argv=None):
     plot_results(
         df,
         args.out_dir / f"{name}.png",
-        chance=1 / len(config.TARGET_FREQS),
+        chance=1 / len(target_freqs(args)),
         note="; bad training trials/channels left out" if cleaned else "",
     )
     print_summary(df)

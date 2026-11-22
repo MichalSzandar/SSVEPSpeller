@@ -11,6 +11,8 @@ Start it first, then scripts/speller_gui.py and scripts/record.py (and
 scripts/fake_eeg_stream.py instead of the cap). Ctrl+C stops it and saves the decision
 log to data/recordings/<subject>_<date>_<condition>_backend.csv (one row per answered
 trial), where the condition is the --nlp kind, followed by "-fusion" with --fusion.
+The options of the run (method, window, latency, calibration, phrases ...) go to the
+same name with .json instead of .csv, written at the start.
 
 --nlp picks the word suggestions (ssvep/language.py): none (the without-NLP condition),
 unigram, or gpt2. The language model is loaded and warmed up before the GUI connects.
@@ -526,6 +528,21 @@ def save_log(rows: list[dict], path: Path) -> None:
     print(f"Saved {len(rows)} decisions to {path}")
 
 
+def save_settings(args: argparse.Namespace, path: Path) -> None:
+    """Write the run's options to ``path`` (JSON), next to its decision log.
+
+    The log alone doesn't say how the run was configured (method, window, latency,
+    calibration, phrases ...), and the analysis needs it (scripts/analyse_online.py).
+    Written before training, so it exists even if the run crashes.
+    """
+    settings = {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+    }
+    settings["calibration"] = [str(p) for p in args.calibration]
+    path.write_text(json.dumps(settings, indent=2))
+
+
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -663,6 +680,7 @@ def main(argv=None):
     # The condition in the name, so the analysis can't mix up with and without NLP
     condition = f"{args.nlp}-fusion" if args.fusion else args.nlp
     log_path = config.RECORDINGS_DIR / f"{args.subject}_{stamp}_{condition}_backend.csv"
+    save_settings(args, log_path.with_suffix(".json"))
 
     print(f"Training {args.method} on {args.calibration} ...")
     X, y = load_calibration(args.calibration)
