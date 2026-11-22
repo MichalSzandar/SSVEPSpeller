@@ -27,31 +27,31 @@ system does, and the non-functional requirements, which constrain how it does it
 
 \begin{table}[tb]
   \centering
-  \caption{Functional (FR) and non-functional (NFR) requirements.}
+  \caption{Functional (FR) and non-functional (NFR) requirements. How each was verified is summarised in \cref{tab:verification}.}
   \label{tab:requirements}
-  \begin{tabularx}{\textwidth}{@{}lXl@{}}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
     \toprule
-    ID & Requirement: the system must\ldots & Verified in \\
+    ID & Requirement: the system must\ldots \\
     \midrule
-    \multicolumn{3}{@{}l}{\textit{Functional requirements}} \\
-    FR1 & present six targets flickering at chosen frequencies between 8 and 15\,Hz, not limited to divisors of the refresh rate & \\
-    FR2 & timestamp every stimulus event on the same clock as the \acs{EEG} & \\
-    FR3 & run a calibration session that records labelled \acs{EEG} trials for training the classifier & \\
-    FR4 & record the \acs{EEG} and the stimulus events to a file for offline analysis & \\
-    FR5 & classify each selection in real time and show the selected target to the user & \\
-    FR6 & let the user type any English text with only six targets: the 26 letters, space and backspace, a way to undo a wrong selection, and accepting a suggested word & \\
-    FR7 & suggest words from a language model that can be switched on and off, so that the online experiment can compare both conditions & \\
-    FR8 & support copy-spelling of a given phrase: cue the next correct target and log it as the ground truth for accuracy and \acs{ITR} & \\
-    FR9 & replay a recording offline through the online processing pipeline & \\
+    \multicolumn{2}{@{}l}{\textit{Functional requirements}} \\
+    FR1 & present six targets flickering at chosen frequencies between 8 and 15\,Hz, not limited to divisors of the refresh rate \\
+    FR2 & timestamp every stimulus event on the same clock as the \acs{EEG} \\
+    FR3 & run a calibration session that records labelled \acs{EEG} trials for training the classifier \\
+    FR4 & record the \acs{EEG} and the stimulus events to a file for offline analysis \\
+    FR5 & classify each selection in real time and show the selected target to the user \\
+    FR6 & let the user type any English text with only six targets: the 26 letters, space and backspace, a way to undo a wrong selection, and accepting a suggested word \\
+    FR7 & suggest words from a language model that can be switched on and off, so that the online experiment can compare both conditions \\
+    FR8 & support copy-spelling of a given phrase: cue the next correct target and log it as the ground truth for accuracy and \acs{ITR} \\
+    FR9 & replay a recording offline through the online processing pipeline \\
     \midrule
-    \multicolumn{3}{@{}l}{\textit{Non-functional requirements}} \\
-    NFR1 & keep the stimulus timing precise, with no dropped frames in normal operation & \\
-    NFR2 & finish the classification and the word suggestions within the 0.5\,s gaze shift & \\
-    NFR3 & process and classify the \acs{EEG} identically offline and online & \\
-    NFR4 & be testable end to end without the \acs{EEG} cap & \\
-    NFR5 & run on a consumer laptop using only its processor and integrated graphics, with a low-cost dry-electrode \acs{EEG} cap & \\
-    NFR6 & be publicly available, with automated tests that run on every commit (continuous integration) & \\
-    NFR7 & be used only after the user has been warned about the risk of photosensitive epilepsy & \\
+    \multicolumn{2}{@{}l}{\textit{Non-functional requirements}} \\
+    NFR1 & keep the stimulus timing precise, with no dropped frames in normal operation \\
+    NFR2 & finish the classification and the word suggestions within the 0.5\,s gaze shift \\
+    NFR3 & process and classify the \acs{EEG} identically offline and online \\
+    NFR4 & be testable end to end without the \acs{EEG} cap \\
+    NFR5 & run on a consumer laptop using only its processor and integrated graphics, with a low-cost dry-electrode \acs{EEG} cap \\
+    NFR6 & be publicly available, with automated tests that run on every commit (continuous integration) \\
+    NFR7 & be used only after the user has been warned about the risk of photosensitive epilepsy \\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -76,19 +76,20 @@ Fp1 and the bias electrode at Fp2; the bias electrode actively drives the ground
 amplifier to reduce common-mode noise such as mains
 interference~\citep{brainaccess2026midi}.
 The cap sends the \ac{EEG} to the laptop wirelessly via Bluetooth, and the
-manufacturer's software publishes it as an \ac{LSL} stream~\citep{kothe2025lsl}.
+manufacturer's software publishes it over the \ac{LSL}~\citep{kothe2025lsl}.
 I chose this cap because it matches the hardware targeted by NFR5: it is low-cost, it
 needs no gel, and it has a low number of channels.
 
-Besides the 16 \ac{EEG} channels, in microvolts with a large DC offset, the stream of
-the cap has 22 more columns: a contact flag for every electrode, three accelerometer
-axes, a sample counter, a streaming status and the battery level. The software
-therefore selects the \ac{EEG} channels by their labels, not by their position in the
-stream. The contact flags only tell whether an electrode touches the head, not whether
-its signal is usable: in my first pilot recording, every flag stayed set for the whole
-session, while Oz, Fz, C3, Pz and F8 carried strong 50\,Hz noise and drift. I therefore
-judge the contact from the signal itself, with a short check of the live stream that
-shows the standard deviation of every channel.
+Depending on the settings of the manufacturer's software, the stream of the cap carries
+only the 16 \ac{EEG} channels, in microvolts with a large DC offset, or 22 more columns:
+a contact flag for every electrode, three accelerometer axes, a sample counter, a
+streaming status and the battery level. The software therefore selects the \ac{EEG}
+channels by their labels, not by their position in the stream. The contact flags only
+tell whether an electrode touches the head, not whether its signal is usable: in an
+early test recording, every flag stayed set for the whole session, while Oz, Fz, C3, Pz
+and F8 carried strong 50\,Hz noise and drift. I therefore judge the contact from the
+signal itself, with a short check of the live stream that shows the standard deviation
+of every channel.
 
 I set the display to 120\,Hz rather than 60\,Hz because the sampled stimulus waveform
 (\cref{sec:stimulus}) then has twice as many samples per cycle, from 15 at 8\,Hz to 8 at
@@ -333,8 +334,8 @@ cap is weaker than in laboratory recordings: dry electrodes, with their much hig
 impedance, record more noise than wet electrodes~\citep{mathewson2017dry}, and the cap
 has eight channels and no PO electrodes, against the 64 channels of the Benchmark
 dataset~\citep{wang2017benchmark}.
-Even with six targets, the offline accuracy on my pilot recordings is far below that
-on Benchmark at the same window length (\cref{ch:results}).
+Even with six targets, the offline accuracy on my recordings is lower than on Benchmark
+at the same window length, most of all for short windows (\cref{sec:own-recordings}).
 
 Fewer targets also keep the calibration short. \ac{TRCA} needs several training trials
 per target: with six targets, ten trials each take about 7 minutes
@@ -408,7 +409,8 @@ event to the recorder; no backend runs during calibration (\cref{sec:architectur
 \end{figure}
 
 The 5\,s flicker is long enough to cover the longest analysed window of 4\,s plus the
-latency of 0.7\,s used with the cap (\cref{ch:processing}), and it is the same as in the
+latency of 0.7\,s used in the offline analysis of my recordings (\cref{sec:datasets}),
+and it is the same as in the
 Benchmark dataset~\citep{wang2017benchmark}, so the same epoching and window sweep run
 on both datasets.
 The 60 trials take about 7 minutes plus the breaks, short enough to record a new
@@ -479,23 +481,24 @@ the analysis. \Cref{fig:trial-calibration} shows the markers of one trial. The s
         {gaze};
       \node[phase, fill=black!12, minimum width=2*1.9cm, anchor=south west] at (0.5,0)
         {flicker};
-      \node[phase, dashed, minimum width=0.7*1.9cm, anchor=south west] at (2.5,0)
+      \node[phase, dashed, minimum width=1.2*1.9cm, anchor=south west] at (2.5,0)
         {wait};
       \node[phase, fill=green!12, minimum width=0.5*1.9cm, anchor=south west,
-          align=center, font=\scriptsize] at (3.2,0)
+          align=center, font=\scriptsize] at (3.7,0)
         {feed-\\back};
       \foreach \t/\e in {0/cue, 0.5/stim\_on, 2.5/stim\_off}
         \draw[evt] (\t,1.3) node[lbl] {\e} -- (\t,0.72);
-      \draw[evt] (3.2,1.3) node[lbl, xshift=4mm] {feedback} -- (3.2,0.72);
-      \draw[evt] (3.2,-0.75) node[below, font=\scriptsize] {state from the backend}
-        -- (3.2,-0.02);
-      \draw (0,-0.1) -- (3.7,-0.1);
-      \foreach \t in {0,1,2,3}
+      \draw[evt] (3.7,1.3) node[lbl, xshift=4mm] {feedback} -- (3.7,0.72);
+      \draw[evt] (3.7,-0.75) node[below, font=\scriptsize] {state from the backend}
+        -- (3.7,-0.02);
+      \draw (0,-0.1) -- (4.2,-0.1);
+      \foreach \t in {0,1,2,3,4}
         \draw (\t,-0.1) -- (\t,-0.2) node[below left, font=\scriptsize] {\t};
-      \node[font=\scriptsize, anchor=west] at (3.8,-0.35) {s};
+      \node[font=\scriptsize, anchor=west] at (4.3,-0.35) {s};
     \end{tikzpicture}
     \caption{Online trial: 0.5\,s gaze shift with the labels shown, 2\,s of flicker,
-      the wait for the answer of the backend (at most 3\,s, typically about 0.7\,s),
+      the wait for the answer of the backend (at most 3\,s; about 1.2\,s in my online
+      session),
       and 0.5\,s of feedback. The cue marker is sent only when the next target is cued
       in copy-spelling.}
     \label{fig:trial-online}
@@ -538,7 +541,7 @@ everything both inlets deliver. The layer works the same way with the cap and wi
 simulated stream (\cref{sec:testing}).
 
 A recording is one compressed NumPy~\citep{harris2020numpy} file with the fields of \cref{tab:recording}. It
-holds all 38 columns of the stream, so nothing the cap sends is lost, and both
+holds every column of the stream, so nothing the cap sends is lost, and both
 timestamps are already on the same clock, so samples and markers can be compared
 without an alignment step. The recorder stops by itself one second after the
 end-of-session marker, because the last \ac{EEG} samples arrive later than the markers.
@@ -571,16 +574,18 @@ for the offline analysis and for training the online classifier, so both see the
 data (NFR3). Which part of the epoch is analysed, defined by the latency and the window
 length, is described in \cref{ch:processing}.
 
-The timestamps of the cap cannot be taken for granted. In the first online session,
-the \ac{EEG} timestamps ran about 0.5\,s ahead of the markers, so the analysed window
-started before the response did. The symptom was the answer delay, the time from the
-end of the flicker to the answer of the backend. The backend can only answer once the
-whole epoch has arrived; with a window as long as the flicker, that is at least the
-latency plus 0.5\,s after the end of the flicker, 0.64\,s at that time, yet the answers
-came after only 0.14\,s. The trial table of every online session therefore records the
-answer delay, and a delay well below this bound shows that the \ac{EEG} timestamps lead
-the markers. How I then chose the latency, and what it changed, is reported in
-\cref{sec:online-results}.
+The timestamps of the cap cannot be taken for granted. In my first session, the
+\ac{EEG} timestamps ran about 0.5\,s ahead of the markers, so a window that starts at
+the usual visual latency starts before the response does; the offline accuracy of that
+session therefore rises with the latency up to about 0.7\,s (\cref{sec:own-recordings}).
+Online, such a lead shows in the answer delay, the time from the end of the flicker to
+the answer of the backend. The backend can only answer once the whole epoch has
+arrived; with a window as long as the flicker, that is at least the latency plus
+0.5\,s after the end of the flicker. An answer delay well below this bound shows that
+the \ac{EEG} timestamps lead the markers, so the trial table of every online session
+records it. In my online session, with a latency of 0.6\,s, the answers came a median
+of 1.19\,s after the flicker, above the bound of 1.1\,s, so the timestamps did not lead
+on that day (\cref{sec:online-results}).
 
 \section{Online speller}
 \label{sec:online}
@@ -625,24 +630,22 @@ the ground truth for the logs, but the backend never uses it to classify. A tria
 
 Waiting for the epoch is the largest cost of an online selection. When the window is
 as long as the flicker, the epoch ends $\tau + 0.5$\,s after the end of the flicker, so
-the answer cannot come before the \ac{EEG} sample with that timestamp has arrived. With
-correct timestamps, the latency of 0.7\,s used with the cap would mean a wait of
-1.2\,s. In the online runs with the cap, however, the \ac{EEG} timestamps led the
-markers by about 0.5\,s, which this latency compensates (\cref{sec:acquisition}), and
-the answer came a median of 0.69\,s after the end of the flicker. The computation is a
-small part of this wait: the classification of a trial took a median of 38\,ms (at
-most 74\,ms) with the cap, and the transformer suggestions a median of 34\,ms (at most
-128\,ms) in a test with the simulated stream (\cref{sec:testing}). One selection
-therefore took 3.7\,s from onset to onset: 0.5\,s of gaze shift, 2\,s of flicker,
-0.7\,s of waiting and 0.5\,s of feedback. This time, not the window length plus the
-gaze shift, is the time per selection I use for the online \ac{ITR}
-(\cref{sec:online-results}).
+the answer cannot come before the \ac{EEG} sample with that timestamp has arrived. In
+my online session with the cap, the latency, chosen from a sweep over the calibration of
+the same session, was 0.6\,s, so the answer could come 1.1\,s after the end of the
+flicker at the earliest; it came after a median of 1.19\,s. The computation is a small
+part of this wait: the classification of a trial took a median of 11\,ms (at most
+22\,ms), and the transformer suggestions, whenever the text changed, a median of 26\,ms
+(at most 74\,ms). One selection therefore took 4.2\,s from onset to onset: 0.5\,s of
+gaze shift, 2\,s of flicker, 1.2\,s of waiting and 0.5\,s of feedback. This time, not
+the window length plus the gaze shift, is the time per selection I use for the online
+\ac{ITR} (\cref{sec:online-results}).
 
 At start-up, the backend trains the classifier on the calibration recorded at the
-beginning of the same session (\cref{sec:calibration}). In replays of my pilot
-recordings, the \ac{TRCA}-based classifiers were much less accurate when trained on
-another recording than within one recording (\cref{sec:own-recordings}), so every
-online session gets its own calibration. Before training, the backend cuts the
+beginning of the same session (\cref{sec:calibration}). Trained on the calibration of
+my other session, the \ac{TRCA}-based classifiers were much less accurate than within
+one session (\cref{sec:own-recordings}), so every online session gets its own
+calibration. Before training, the backend cuts the
 calibration epochs to the length of the online epoch, so the filters see the same edges
 in training as online, and a new latency or window needs no new calibration. Also
 before the \ac{GUI} connects, the backend loads the \ac{LM} and calls it once, because
@@ -699,17 +702,17 @@ The second tool is the replay, which feeds a recording through the code of the b
 as if it arrived live: the \ac{EEG} in chunks of 20\,ms, and every marker once the
 \ac{EEG} has reached its timestamp. The decoder, the speller and the \ac{LM} are the
 same as online; only the \ac{LSL} inlets and the \ac{GUI} are left out. The replay
-served two checks. First, replaying my pilot calibrations with \ac{CCA} and \ac{FBCCA}
-gave exactly the decisions of the offline comparison of methods
-(\cref{sec:evaluation}), so the online path processes a trial in the same way as the
-offline one (NFR3). In 7 of 108 trials the epochs of the two paths start one sample
-apart, because the timestamps of the cap are not perfectly regular, but this changed
-only a single decision. Second, replaying the online runs of the first session with the
-cap, at the latency used online, reproduced the logged decisions exactly (FR9), so the
-effect of the latency could then be studied offline on the same data
+served two checks. First, replaying my two calibration recordings with \ac{CCA} and
+\ac{FBCCA} gave the decisions of the offline comparison of methods
+(\cref{sec:evaluation}) in 239 of 240 trials, so the online path processes a trial in
+the same way as the offline one (NFR3). The epochs of the two paths start at the same
+sample in every trial; the one different decision comes from the shorter epoch that the
+online path filters (\cref{eq:online-epoch}). Second, replaying my online session with
+the cap, at the latency used online, reproduced every logged decision (FR9), so other
+latencies and classifiers can be compared offline on the same trials
 (\cref{sec:online-results}).
 
-The package and the scripts are covered by 571 automated tests written with pytest.
+The package and the scripts are covered by 624 automated tests written with pytest.
 % Recount at v1.0: .venv/bin/python -m pytest --collect-only -q | tail -1
 Three kinds of tests carry most of the weight. The first use synthetic signals with a
 known answer: a sinusoid of known frequency and unknown phase must give a canonical
@@ -749,9 +752,9 @@ a window, so the flicker test on the real screen runs before every session
 (\cref{sec:stimulus}), and the timing of every session is checked from its flip log
 (\cref{sec:timing-results}). The simulated stream is also kinder than the cap: its
 noise is white and stationary, it has no artifacts, and its timestamps agree with the
-markers. The 0.5\,s lead of the timestamps of the cap therefore showed up only in the
-first session with the cap (\cref{sec:acquisition}), which is why the answer delay of
-every online session is now checked.
+markers. A lead of the timestamps of the cap, such as the 0.5\,s in my first session
+(\cref{sec:acquisition}), can therefore only be found with the cap, which is why every
+online session records its answer delay.
 
 \Cref{tab:verification} closes the loop with \cref{sec:requirements}: for every
 requirement, how it was verified and with what result.
@@ -766,21 +769,21 @@ requirement, how it was verified and with what result.
     ID & Verified by & Result \\
     \midrule
     FR1  & unit tests of the luminance sequence; flicker test on the real screen & met: 8.0--15.0\,Hz, four of the six frequencies not divisors of 120\,Hz (\cref{tab:targets}) \\
-    FR2  & flip timestamps of the markers; cued targets recovered from a recording of the simulated stream & met for the markers; the \acs{EEG} timestamps of the cap led by 0.5\,s (\cref{sec:acquisition}) \\
+    FR2  & flip timestamps of the markers; cued targets recovered from a recording of the simulated stream & met for the markers; the \acs{EEG} timestamps of the cap led by about 0.5\,s in my first session (\cref{sec:acquisition}) \\
     FR3  & calibration with the cap & met: 60 trials without dropped frames \\
     FR4  & recordings read by the offline analysis & met (\cref{sec:own-recordings}) \\
-    FR5  & online runs with the cap & met: classification in a median of 38\,ms \\
+    FR5  & online session with the cap & met: classification in a median of 11\,ms \\
     FR6  & unit tests of the speller; simulated copying of 500 phrases & met: every phrase spelled \\
-    FR7  & start-up option; test with the simulated stream & met: 9 of 9 words accepted \\
+    FR7  & start-up option; test with the simulated stream; online session & met: 9 of 9 words accepted in the test, 11 words accepted online \\
     FR8  & copy-spelling with the cap & met: accuracy from the logs (\cref{sec:online-results}) \\
-    FR9  & replay of the online runs & met: logged decisions reproduced exactly \\
+    FR9  & replay of the online session & met: logged decisions reproduced exactly \\
     \midrule
-    NFR1 & flip logs of every session & met: no dropped frames with the cap (\cref{sec:timing-results}) \\
-    NFR2 & times in the decision logs & met: classification at most 74\,ms, suggestions at most 141\,ms \\
-    NFR3 & one package for both paths; replay against the offline comparison & met: identical \acs{CCA} and \acs{FBCCA} decisions \\
+    NFR1 & flip logs of every session & met in the calibrations (no dropped frames); one dropped frame in 98 online trials (\cref{sec:timing-results}) \\
+    NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms; over the phrase set, suggestions at most 141\,ms (\cref{sec:lm-evaluation}) \\
+    NFR3 & one package for both paths; replay against the offline comparison & met: 239 of 240 \acs{CCA} and \acs{FBCCA} decisions identical \\
     NFR4 & simulated stream, replay, tests of the whole system & met \\
     NFR5 & all measurements on the laptop of \cref{sec:hardware} & met \\
-    NFR6 & public repository; 571 tests in continuous integration & met \\
+    NFR6 & public repository; 624 tests in continuous integration & met \\
     NFR7 & only subject so far: the author, aware of the risk (\cref{sec:calibration}) & met; screening and consent needed before other people use the system \\
     \bottomrule
   \end{tabularx}

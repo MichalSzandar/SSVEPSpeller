@@ -8,10 +8,28 @@
 \chapter{Language model integration}
 \label{ch:language}
 
+In this chapter I will focus on integrating a language model into the \ac{BCI} system. 
+The language model is used to improve the overall \ac{ITR} and accuracy.
+
 \section{Why a language model}
 \label{sec:why-lm}
 
+Despite the fact, that \ac{ITR} and accuracy results from the benchmark dataset were very promising, and most classification methods
+were able to achieve 100\% accuracy over a 0.5 s window, the data collected from my offline experiments showed that 
+those numbers are unreachable on consumer-grade EEG devices. The main reason for this is the low \ac{SNR} of the EEG signal, 
+which is further worsened by the fact that the \ac{SSVEP} response is not always present in every trial. This leads to a high 
+number of misclassifications, which in turn leads to a low \ac{ITR}.
+
+My solution to this problem is to integrate a language model into the \ac{BCI} system.
+The language model has two roles here:
+\begin{enumerate}
+    \item It can predict the next words based on current context, top 3 suggestions are displayed to the user, and the user can select one of them instead of spelling the whole word.
+    \item It is a part of a fusion model, which combines the output of the classifier with the output of the language model to predict next target. 
+    This way, even if the classifier misclassifies the target, the language model can correct it based on the context.
+\end{enumerate}
+
 \section{Word completion}
+
 \label{sec:completion}
 
 \section{Transformer re-ranking}

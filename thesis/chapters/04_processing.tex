@@ -11,8 +11,8 @@
 This chapter describes the datasets and the methods I used to process the \ac{EEG} signals
 and classify them into the six targets: the Benchmark dataset~\citep{wang2017benchmark} and
 my own recordings, the preprocessing pipeline (notch filter, band-pass filter, filter bank),
-the classifiers, their implementation, and the evaluation method (cross-validation, accuracy
-and \ac{ITR} against window length, statistical tests). The classifiers are \ac{CCA},
+the classifiers, and the evaluation method (cross-validation, accuracy and \ac{ITR} against
+window length, statistical tests). The classifiers are \ac{CCA},
 \ac{FBCCA} and their normalised variants, \ac{TRCA}, \ac{eTRCA} and \ac{FBeTRCA}, and a
 baseline that classifies the \ac{PSD} with \ac{LDA}.
 
@@ -32,11 +32,12 @@ at the speller frequencies (\cref{tab:targets}), which lie on the Benchmark grid
 per subject, six per target. The analysis window starts 0.14\,s after the flicker onset, the
 visual latency used by \citet{chen2015highspeed} and \citet{nakanishi2018trca}.
 
-% TODO before submission: this sentence is only true once compare_methods has been run on
-% all 40 Benchmark targets (and all 35 subjects), with the numbers in sec:benchmark.
-To verify my implementations of \ac{CCA}, \ac{FBCCA} and the \ac{TRCA} family, I tested them
-on all 40 targets of the Benchmark dataset and obtained roughly the same accuracies as those
-reported by \citet{nakanishi2018trca} (\cref{sec:benchmark}).
+% TODO: compare results/benchmark_40.csv with the numbers in Nakanishi et al. 2018 (their
+% data lengths and ITR definition) and say in sec:benchmark how close they are.
+To check my implementations of \ac{CCA}, \ac{FBCCA} and the \ac{TRCA} family against the
+literature, I also ran them on all 40 targets of the Benchmark dataset, with windows from
+0.25 to 1\,s, where their results can be compared with those reported by
+\citet{nakanishi2018trca} (\cref{sec:benchmark}).
 
 I also recorded my own data with the cap described in \cref{sec:hardware}, in two sessions
 on different days with myself as the subject. Each session followed the calibration protocol
@@ -45,8 +46,10 @@ Each trial consists of a 2\,s cue and 5\,s of flicker. It is cut into a 6\,s epo
 same layout as a Benchmark epoch: 0.5\,s before the flicker onset, the 5\,s of flicker and
 0.5\,s after it, so the same processing runs on both datasets. The analysis window starts
 0.7\,s after the onset marker instead of 0.14\,s, because in the first session the timestamps
-of the cap ran about 0.5\,s ahead of the markers. A latency of 0.7\,s gave the best accuracy
-in that session and close to the best in the second (\cref{sec:own-recordings}).
+of the cap ran about 0.5\,s ahead of the markers (\cref{sec:acquisition}). In that session,
+the accuracy rose with the latency up to about 0.7\,s; in the second session, it depended
+little on the latency between 0.14 and 1\,s (\cref{sec:own-recordings}), so one latency of
+0.7\,s serves both.
 
 \section{Preprocessing}
 \label{sec:preprocessing}
@@ -179,7 +182,7 @@ windows, because the correlations depend on the window length.
 \section{The TRCA family}
 \label{sec:trca}
 
-The \ac{TRCA} family of methods was originally proposed by \citet{tanaka2013trca} for \ac{NIRS}
+The \ac{TRCA} method was originally proposed by \citet{tanaka2013trca} for \ac{NIRS}
 and later applied to \ac{SSVEP} by \citet{nakanishi2018trca}. Unlike \ac{CCA}, which compares
 the \ac{EEG} with artificial sine waves and does not require training, \ac{TRCA} learns
 from a set of calibration trials gathered from the user before the online experiment.
@@ -190,8 +193,8 @@ to trial. Therefore, \ac{TRCA} seeks a spatial filter that maximises the similar
 trials of each target, which enhances the \ac{SSVEP} and suppresses the noise.
 
 The spatial filter of \ac{TRCA} is computed for each target separately. 
-Let $\mathbf{X}_k^{(h)} \in \mathbb{R}^{N_c \times N_s}$ be the $h$-th training trial of 
-target~$k$, with the mean of each channel removed, where $N_c$ is the number of channels 
+Let $\mathbf{X}_k^{(h)} \in \mathbb{R}^{N_c \times N_s}$ be the $h$-th of the $N_\mathrm{tr}$
+training trials of target~$k$, with the mean of each channel removed, where $N_c$ is the number of channels
 and $N_s$ is the number of samples in the analysis window. 
 The filter $\mathbf{w}_k \in \mathbb{R}^{N_c}$ has one weight per channel, and the filtered 
 trial is $\mathbf{w}_k^\top \mathbf{X}_k^{(h)}$, a single time series. The matrices
@@ -266,8 +269,9 @@ evidence against the target, and squaring it would turn it into evidence for it.
 correlation is never negative, so squaring loses nothing there. The target with the highest
 score is selected.
 
-\ac{TRCA} and its extensions need calibration data from the same session, because training on another session 
-lowered the accuracy of \ac{eTRCA} in my pilot recordings. They also need at least two training 
+\ac{TRCA} and its extensions need calibration data from the same session: trained on the
+calibration of my other session, they were much less accurate than within one session
+(\cref{sec:own-recordings}). They also need at least two training
 trials per target, because \ac{TRCA} cannot compute a filter with only one trial. Finally, 
 they require test windows of the same length and start as the training windows, and precise onset 
 markers: trials that are not aligned in time blur the template and reduce the correlation with the test window.
@@ -353,8 +357,11 @@ from one selection to the next (\cref{sec:online-results}).
 To make sure that the classifiers are not tested on the same trials they were trained on, I
 used leave-one-block-out cross-validation: one block of trials is left out for testing,
 and the classifier is trained on the remaining blocks. This is repeated for every block,
-and the accuracy is the mean over all folds. In this context a block is a set of six trials,
-one per target, and a fold is one iteration of the cross-validation.
+and the accuracy is the mean over all folds. In this context a block is a set of trials with
+one trial per target (six, or 40 in the check of \cref{sec:datasets}), and a fold is one
+iteration of the cross-validation. All classifiers are implemented as scikit-learn
+estimators~\citep{pedregosa2011sklearn}, so the same cross-validation code evaluates all of
+them, and the online backend uses them unchanged.
 
 Before a classifier is fitted, its training trials pass through artifact rejection. During
 some trials an electrode may lose contact with the scalp, or the user may blink or move, and
@@ -397,3 +404,15 @@ contains more cycles of the stimulus, so the accuracy rises with the window leng
 does the time per selection $T_\mathrm{sel} = T + 0.5$\,s. The \ac{ITR} therefore peaks at an
 intermediate window length, and I take the window with the highest \ac{ITR} as the best window
 of a method.
+
+To compare the methods on the Benchmark dataset, I used tests on ranks, which do not assume
+normally distributed values: the accuracies are bounded by one, and many subjects reach it.
+For every window length, and once more with every method at its best window, a Friedman
+test~\citep{friedman1937ranks} checks whether the methods differ at all, with the 35 subjects
+as blocks. Its effect size is Kendall's coefficient of concordance, the Friedman statistic
+scaled to the range from 0, when the subjects rank the methods at random, to 1, when they all
+rank them in the same order. Two-sided Wilcoxon signed-rank tests~\citep{wilcoxon1945} then
+compare every pair of methods, and their p-values are corrected for the 28 pairs with the
+method of \citet{holm1979}, which keeps the probability of any false positive among the pairs
+below 5\,\%. The tests were computed with SciPy~\citep{virtanen2020scipy}. My own recordings,
+two sessions of one subject, are described without statistical tests.
