@@ -21,6 +21,15 @@
 
 \section{Online results}
 \label{sec:online-results}
+% Numbers moved here from Ch. 3 (2026-11-23); Ch. 3 now points to this section for them.
+% Nov 16 online session:
+% - latency 0.6 s, chosen from a sweep over the calibration of the same session
+% - answer delay (end of flicker -> answer): median 1.19 s, above the bound
+%   tau + 0.5 s = 1.1 s, so the EEG timestamps did not lead the markers that day
+% - classification: median 11 ms (max 22 ms); transformer suggestions whenever the
+%   text changed: median 26 ms (max 74 ms), a small part of the wait
+% - time per selection, onset to onset, used for the online ITR: 4.2 s =
+%   0.5 s gaze shift + 2 s flicker + 1.2 s wait + 0.5 s feedback
 
 \section{Language model results}
 \label{sec:lm-results}

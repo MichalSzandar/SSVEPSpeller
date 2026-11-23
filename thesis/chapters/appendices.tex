@@ -9,5 +9,84 @@
 \chapter{Data formats and communication protocol}
 \label{app:protocol}
 
+\section*{EEG stream of the cap}
+
+Depending on the settings of the manufacturer's software, the stream of the cap carries
+only the 16 \ac{EEG} channels, in microvolts with a large DC offset, or 22 more columns:
+a contact flag for every electrode, three accelerometer axes, a sample counter, a
+streaming status and the battery level. The software selects the \ac{EEG} channels by
+their labels, so it works with both.
+
+\section*{Markers}
+
+The calibration program and the speller \ac{GUI} send every event as a \ac{JSON}
+object with the name of the event and its fields (\cref{tab:markers}). The speller
+\ac{GUI} sends the same events as the calibration program; its first marker gives the
+durations of the gaze shift and the feedback instead of the number of blocks and the
+duration of the cue. It also sends three markers of its own, listed at the bottom of
+the table.
+
+\begin{table}[tb]
+  \centering
+  \caption{Markers of the calibration program and the speller \acs{GUI}. Each is
+    time-stamped with the flip that showed its event, or with the time it was sent if
+    no flip shows it.}
+  \label{tab:markers}
+  \begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{3.6cm}X@{}}
+    \toprule
+    Event & Sent at & Fields \\
+    \midrule
+    \texttt{session\_start} & the start of the session & subject, frequencies, phases, refresh rate, number of blocks, cue and flicker durations, screen size, positions and size of the squares \\
+    \texttt{block\_start}   & the start of a block & block \\
+    \texttt{cue}            & the first flip of the cue & trial, block, target, frequency \\
+    \texttt{stim\_on}       & the first flip of the flicker & trial, block, target, frequency \\
+    \texttt{stim\_off}      & the first flip after the flicker & as \texttt{stim\_on}, plus the number of dropped frames and whether the flicker was complete \\
+    \texttt{block\_end}     & the end of a block & block \\
+    \texttt{session\_end}   & the end of the session & number of trials, whether the session was aborted \\
+    \midrule
+    \multicolumn{3}{@{}l}{\textit{Speller \acs{GUI} only}} \\
+    \texttt{state\_request} & every 0.5\,s until the first state of the backend arrives & none \\
+    \texttt{feedback}       & the first flip of the feedback & trial, block, selected target, text \\
+    \texttt{no\_answer}     & 3\,s after the flicker without an answer & trial, block \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section*{Recording file}
+
+A recording is one compressed NumPy~\citep{harris2020numpy} file with the fields of
+\cref{tab:recording}.
+
+\begin{table}[tb]
+  \centering
+  \caption{Contents of a recording file.}
+  \label{tab:recording}
+  \begin{tabularx}{\textwidth}{@{}lX@{}}
+    \toprule
+    Field & Contents \\
+    \midrule
+    \ac{EEG}           & continuous signal of all columns of the stream, channels $\times$ samples, in \textmu V \\
+    sample times       & \acs{LSL} timestamp of every sample, in seconds \\
+    markers            & the \acs{JSON} marker strings as received \\
+    marker times       & \acs{LSL} timestamp of every marker, in seconds \\
+    channels           & label of every column \\
+    sampling rate      & nominal sampling rate of the stream, in Hz \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+\section*{Logs of an online session}
+
+Besides the recording, every online session leaves two logs:
+\begin{itemize}
+  \item the trial table of the \ac{GUI}, with the timestamps of every trial, its
+    dropped frames, the time of the answer, the selected target and the text, and
+    with the timestamps of all flips saved beside it;
+  \item the decision log of the backend, with the target, the decision, the selected
+    item, the new text, the score of every target and the time taken by the
+    classification and by the speller, and with the fusion also the prior and the
+    posterior of every target.
+\end{itemize}
+
 \chapter{Phrases used in the experiment}
 \label{app:phrases}

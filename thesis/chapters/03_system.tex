@@ -81,15 +81,12 @@ I chose this cap because it matches the hardware targeted by NFR5: it is low-cos
 needs no gel, and it has a low number of channels.
 
 Depending on the settings of the manufacturer's software, the stream of the cap carries
-only the 16 \ac{EEG} channels, in microvolts with a large DC offset, or 22 more columns:
-a contact flag for every electrode, three accelerometer axes, a sample counter, a
-streaming status and the battery level. The software therefore selects the \ac{EEG}
-channels by their labels, not by their position in the stream. The contact flags only
-tell whether an electrode touches the head, not whether its signal is usable: in an
-early test recording, every flag stayed set for the whole session, while Oz, Fz, C3, Pz
-and F8 carried strong 50\,Hz noise and drift. I therefore judge the contact from the
-signal itself, with a short check of the live stream that shows the standard deviation
-of every channel.
+extra columns besides the \ac{EEG} (\cref{app:protocol}), so the software selects the
+\ac{EEG} channels by their labels, not by their position in the stream. One of the
+extra columns is a contact flag for every electrode, but in an early test recording
+every flag stayed set while five electrodes carried strong 50\,Hz noise and drift, so I
+judge the contact from the signal itself, with a short check of the live stream that
+shows the standard deviation of every channel.
 
 I set the display to 120\,Hz rather than 60\,Hz because the sampled stimulus waveform
 (\cref{sec:stimulus}) then has twice as many samples per cycle, from 15 at 8\,Hz to 8 at
@@ -198,8 +195,7 @@ one colour.
 The sampled sinusoid lets a target flicker at any frequency below $R/2$.
 The simpler alternative, switching a square between black and white every few
 refreshes, can only produce the frequencies $R/n$ for a whole number of refreshes $n$
-per cycle: at 120\,Hz, the ones between 8 and 15\,Hz are 8.0, 8.57, 9.23, 10.0, 10.9,
-12.0, 13.3 and 15.0\,Hz. Four of the six frequencies of this system, 9.4, 10.8, 12.2 and
+per cycle, so four of the six frequencies of this system, 9.4, 10.8, 12.2 and
 13.6\,Hz, could not be shown that way.
 
 The six frequencies run from 8.0 to 15.0\,Hz in steps of 1.4\,Hz (\cref{tab:targets}).
@@ -208,8 +204,7 @@ in steps of 0.2\,Hz~\citep{wang2017benchmark}, so the methods can be compared of
 the same six classes of that dataset (\cref{ch:processing}).
 No harmonic of one target, up to the fifth, coincides with a harmonic of another; the
 closest pairs are 0.4\,Hz apart, for example $3 \times 8.0 = 24.0$\,Hz and
-$2 \times 12.2 = 24.4$\,Hz. An earlier set of five targets (8, 10, 12, 14 and 15\,Hz)
-had exact overlaps, such as $3 \times 8 = 2 \times 12 = 24$\,Hz.
+$2 \times 12.2 = 24.4$\,Hz.
 A known risk of the set is that 8.0, 9.4 and 10.8\,Hz lie in the alpha band, so the
 alpha rhythm of a relaxed subject may be mistaken for one of these targets.
 \Cref{fig:luminance} shows the luminance of the slowest and the fastest target.
@@ -264,9 +259,7 @@ A dropped frame then skips one sample, and the rest of the trial keeps its phase
 relative to the onset. A loop that simply counted its flips would instead delay every
 later sample by one refresh, a phase shift of $45^\circ$ at 15\,Hz, which the
 phase-locked templates of \ac{TRCA} (\cref{sec:trca}) would see for the rest of the
-trial. Counting interval by interval, rather than rounding the time since the onset,
-also limits the effect of a single wrong timestamp, such as an onset flip returned
-before its refresh, to its own interval.
+trial.
 
 Several safeguards keep the timing in check. Before the first block, the \ac{GUI}
 measures the refresh rate from the flips of its start screen and refuses to start if
@@ -281,13 +274,6 @@ recording: no dropped frames, and a standard deviation of the flip intervals bel
 change from one run to the next, a short flicker test on the real screen checks the
 same criteria before every session; the measured timing is reported in
 \cref{sec:timing-results}.
-
-One problem was specific to the platform. On the GNOME desktop with the X11 window
-system used here, the way the windowing library listed the available screens made the
-X server probe the display again; right after a change of the refresh rate, this
-crashed the desktop session. The \ac{GUI} therefore lists the screens with a query that
-reads the cached state of the display without probing it, and the refresh rate is set
-in the system settings, followed by a new login, before a session.
 
 
 
@@ -382,8 +368,7 @@ them one per line.
 Accepting a suggestion replaces the word being typed and adds a space after it.
 Backspace normally deletes one character, but right after an accepted word it removes
 that word and restores the text typed before it, so a word accepted by mistake costs
-one correction instead of one per character. Its label then names the word it would
-remove. Without suggestions no word is ever accepted, so backspace always deletes one
+one correction instead of one per character. Without suggestions no word is ever accepted, so backspace always deletes one
 character, and the condition without the language model is unchanged.
 
 \section{Calibration protocol}
@@ -418,34 +403,14 @@ calibration at the start of every session (\cref{sec:online}), and one recording
 every window from 0.5 to 4\,s, so the online window can be chosen afterwards from the
 same recording.
 
-The calibration \ac{GUI} sends a marker for every event of the session
-(\cref{tab:markers}), each a \ac{JSON} object with the name of the event and its
-fields. The first marker describes the whole stimulus, including the positions and the
-size of the squares on the screen, so every recording documents its own layout. The
-end-of-flicker marker reports the dropped frames of the trial and whether the flicker
-ran to its end; a trial stopped by the operator is marked incomplete and left out of
-the analysis. \Cref{fig:trial-calibration} shows the markers of one trial. The speller
-\ac{GUI} sends the same events and adds three of its own (\cref{sec:online}).
-
-\begin{table}[tb]
-  \centering
-  \caption{Markers of a calibration session. Each is time-stamped with the flip that
-    showed its event, or with the time it was sent if no flip shows it.}
-  \label{tab:markers}
-  \begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}p{3.6cm}X@{}}
-    \toprule
-    Event & Sent at & Fields \\
-    \midrule
-    \texttt{session\_start} & the start of the session & subject, frequencies, phases, refresh rate, number of blocks, cue and flicker durations, screen size, positions and size of the squares \\
-    \texttt{block\_start}   & the start of a block & block \\
-    \texttt{cue}            & the first flip of the cue & trial, block, target, frequency \\
-    \texttt{stim\_on}       & the first flip of the flicker & trial, block, target, frequency \\
-    \texttt{stim\_off}      & the first flip after the flicker & as \texttt{stim\_on}, plus the number of dropped frames and whether the flicker was complete \\
-    \texttt{block\_end}     & the end of a block & block \\
-    \texttt{session\_end}   & the end of the session & number of trials, whether the session was aborted \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
+The calibration \ac{GUI} sends a \ac{JSON} marker for every event of the session: the
+start and the end of the session and of every block, and the cue, the onset and the end
+of the flicker of every trial (\cref{fig:trial-calibration}). The first marker
+describes the whole stimulus, including the positions and the size of the squares on
+the screen, so every recording documents its own layout. The end-of-flicker marker
+reports the dropped frames of the trial and whether the flicker ran to its end; a trial
+stopped by the operator is left out of the analysis. \Cref{app:protocol} lists the
+markers and their fields.
 
 \begin{figure}[tb]
   \centering
@@ -497,9 +462,8 @@ the analysis. \Cref{fig:trial-calibration} shows the markers of one trial. The s
       \node[font=\scriptsize, anchor=west] at (4.3,-0.35) {s};
     \end{tikzpicture}
     \caption{Online trial: 0.5\,s gaze shift with the labels shown, 2\,s of flicker,
-      the wait for the answer of the backend (at most 3\,s; about 1.2\,s in my online
-      session),
-      and 0.5\,s of feedback. The cue marker is sent only when the next target is cued
+      the wait for the answer of the backend (dashed, as its length varies; at most
+      3\,s), and 0.5\,s of feedback. The cue marker is sent only when the next target is cued
       in copy-spelling.}
     \label{fig:trial-online}
   \end{subfigure}
@@ -530,62 +494,31 @@ recorder. The backend stores it in a ring buffer, preprocesses it and classifies
 trial.
 
 Both programs use one acquisition layer, which finds the streams on the network and
-opens an inlet for each of them. The inlet for the \ac{EEG} applies the clock
-synchronisation and the dejittering of \ac{LSL}~\citep{kothe2025lsl}: it converts the
-timestamps of the cap to the local clock and smooths their jitter, which is possible
-because the samples arrive at a regular rate. The inlet for the markers applies only
-the clock synchronisation, because the markers are irregular. On top of the inlets, the
+opens an inlet for each of them. Only the inlet for the \ac{EEG} dejitters its
+timestamps (\cref{sec:architecture}), because only the \ac{EEG} samples arrive at a
+regular rate. On top of the inlets, the
 layer provides a ring buffer, which keeps the last 30\,s of \ac{EEG} with their
 timestamps and returns the samples from a given time on, and a recorder, which keeps
 everything both inlets deliver. The layer works the same way with the cap and with the
 simulated stream (\cref{sec:testing}).
 
-A recording is one compressed NumPy~\citep{harris2020numpy} file with the fields of \cref{tab:recording}. It
-holds every column of the stream, so nothing the cap sends is lost, and both
-timestamps are already on the same clock, so samples and markers can be compared
-without an alignment step. The recorder stops by itself one second after the
-end-of-session marker, because the last \ac{EEG} samples arrive later than the markers.
-\Cref{app:protocol} describes the format in full.
+A recording is one compressed NumPy~\citep{harris2020numpy} file
+(\cref{app:protocol}). It holds every column of the stream, so nothing the cap sends is
+lost, and the timestamps of the samples and of the markers are already on the same
+clock, so they can be compared without an alignment step.
 
-\begin{table}[tb]
-  \centering
-  \caption{Contents of a recording file.}
-  \label{tab:recording}
-  \begin{tabularx}{\textwidth}{@{}lX@{}}
-    \toprule
-    Field & Contents \\
-    \midrule
-    \ac{EEG}           & continuous signal of all columns of the stream, channels $\times$ samples, in \textmu V \\
-    sample times       & \acs{LSL} timestamp of every sample, in seconds \\
-    markers            & the \acs{JSON} marker strings as received \\
-    marker times       & \acs{LSL} timestamp of every marker, in seconds \\
-    channels           & label of every column \\
-    sampling rate      & nominal sampling rate of the stream, in Hz \\
-    \bottomrule
-  \end{tabularx}
-\end{table}
-
-Trials are cut from the continuous recording around their onset markers. Like an epoch
-of the Benchmark dataset, each epoch starts 0.5\,s before the onset and ends 0.5\,s after
-the flicker, 6\,s in all for a calibration trial. Only the eight channels of
+Trials are cut from the continuous recording into epochs around their onset markers,
+with the layout described in \cref{sec:datasets}. Only the eight channels of
 \cref{sec:hardware} are kept, selected by their labels, and trials stopped by the
 operator or not completely recorded are left out. The same function produces the epochs
 for the offline analysis and for training the online classifier, so both see the same
-data (NFR3). Which part of the epoch is analysed, defined by the latency and the window
-length, is described in \cref{ch:processing}.
+data (NFR3).
 
 The timestamps of the cap cannot be taken for granted. In my first session, the
 \ac{EEG} timestamps ran about 0.5\,s ahead of the markers, so a window that starts at
-the usual visual latency starts before the response does; the offline accuracy of that
-session therefore rises with the latency up to about 0.7\,s (\cref{sec:own-recordings}).
-Online, such a lead shows in the answer delay, the time from the end of the flicker to
-the answer of the backend. The backend can only answer once the whole epoch has
-arrived; with a window as long as the flicker, that is at least the latency plus
-0.5\,s after the end of the flicker. An answer delay well below this bound shows that
-the \ac{EEG} timestamps lead the markers, so the trial table of every online session
-records it. In my online session, with a latency of 0.6\,s, the answers came a median
-of 1.19\,s after the flicker, above the bound of 1.1\,s, so the timestamps did not lead
-on that day (\cref{sec:online-results}).
+the usual visual latency starts before the response does; \cref{sec:datasets} shows
+how the offline analysis accounts for this. Online, such a lead shows in the answer
+delay (\cref{sec:online}).
 
 \section{Online speller}
 \label{sec:online}
@@ -599,9 +532,7 @@ answer of the backend. When it comes, a green frame marks the selected square fo
 0.5\,s while the typed text is updated, and then the labels of the next trial appear.
 If no answer comes within 3\,s, the \ac{GUI} pauses, so a stopped backend cannot leave
 the session running without selections. The \ac{GUI} sends the same markers as the
-calibration program (\cref{tab:markers}) and three of its own: a request for the
-current state when it starts, the start of the feedback, and a trial that got no
-answer.
+calibration program and three of its own (\cref{app:protocol}).
 
 The backend adds every chunk of \ac{EEG} it receives to its ring buffer
 (\cref{sec:acquisition}). A trial is ready to be classified once its end-of-flicker
@@ -624,33 +555,26 @@ With the fusion option, the decision is made instead from the scores of the clas
 combined with a prior from the \ac{LM} (\cref{sec:fusion}). The backend answers with
 the new state of the speller: the labels of the six squares, the phrase, the typed
 text, and in copy-spelling the next target. The onset marker carries the target as
-the ground truth for the logs, but the backend never uses it to classify. A trial whose
-\ac{EEG} has already left the ring buffer is answered without a decision, so that the
-\ac{GUI} does not wait in vain.
+the ground truth for the logs, but the backend never uses it to classify.
 
 Waiting for the epoch is the largest cost of an online selection. When the window is
 as long as the flicker, the epoch ends $\tau + 0.5$\,s after the end of the flicker, so
-the answer cannot come before the \ac{EEG} sample with that timestamp has arrived. In
-my online session with the cap, the latency, chosen from a sweep over the calibration of
-the same session, was 0.6\,s, so the answer could come 1.1\,s after the end of the
-flicker at the earliest; it came after a median of 1.19\,s. The computation is a small
-part of this wait: the classification of a trial took a median of 11\,ms (at most
-22\,ms), and the transformer suggestions, whenever the text changed, a median of 26\,ms
-(at most 74\,ms). One selection therefore took 4.2\,s from onset to onset: 0.5\,s of
-gaze shift, 2\,s of flicker, 1.2\,s of waiting and 0.5\,s of feedback. This time, not
-the window length plus the gaze shift, is the time per selection I use for the online
-\ac{ITR} (\cref{sec:online-results}).
+the answer cannot come before the \ac{EEG} sample with that timestamp has arrived. With
+correct timestamps, the answer delay, the time from the end of the flicker to the
+answer, therefore cannot be shorter than $\tau + 0.5$\,s; a delay well below this bound
+shows that the \ac{EEG} timestamps lead the markers (\cref{sec:acquisition}), so the trial table of every
+online session records it. The classification and the word suggestions take only a
+small part of the wait (\cref{sec:online-results}). Because of this wait, the time per
+selection I use for the online \ac{ITR} is measured from onset to onset: the gaze shift,
+the flicker, the wait and the feedback, not only the window length plus the gaze shift.
 
 At start-up, the backend trains the classifier on the calibration recorded at the
-beginning of the same session (\cref{sec:calibration}). Trained on the calibration of
-my other session, the \ac{TRCA}-based classifiers were much less accurate than within
-one session (\cref{sec:own-recordings}), so every online session gets its own
-calibration. Before training, the backend cuts the
-calibration epochs to the length of the online epoch, so the filters see the same edges
-in training as online, and a new latency or window needs no new calibration. Also
-before the \ac{GUI} connects, the backend loads the \ac{LM} and calls it once, because
-the first call is slower, and with the fusion option it fits the temperature of the
-fusion on cross-validated scores of the calibration (\cref{sec:fusion}).
+beginning of the same session (\cref{sec:calibration}), because the \ac{TRCA}-based
+classifiers need calibration data from the same session (\cref{sec:trca}). Before
+training, it cuts the calibration epochs to the length of the online epoch, so the
+filters see the same edges in training as online, and a new latency or window needs no
+new calibration. With the fusion option, it also fits the temperature of the fusion on
+cross-validated scores of the calibration (\cref{sec:fusion}).
 
 The speller has two modes. In copy-spelling, the backend is given a list of phrases,
 taken from the phrase set of \citet{mackenzie2003phrase} (\cref{app:phrases}), and the \ac{GUI} shows the current phrase above the typed text.
@@ -668,19 +592,10 @@ accuracy cannot be measured. The word suggestions work the same way in both mode
 
 The language-model condition is chosen when the backend starts: no suggestions, which
 is the condition without the \ac{LM}, the unigram model or the transformer
-(\cref{ch:language}), each with or without the fusion. The condition is written into
-the name of the log of the backend, so the analysis cannot mix up the conditions. Every
-online session leaves three records:
-\begin{itemize}
-  \item the recording of the \ac{EEG} and the markers (\cref{sec:acquisition});
-  \item the trial table of the \ac{GUI}, with the timestamps of every trial, its
-    dropped frames, the time of the answer, the selected target and the text, and
-    with the timestamps of all flips saved beside it;
-  \item the decision log of the backend, with the target, the decision, the selected
-    item, the new text, the score of every target and the time taken by the
-    classification and by the speller, and with the fusion also the prior and the
-    posterior of every target.
-\end{itemize}
+(\cref{ch:language}), each with or without the fusion. Every online session leaves
+three records: the recording of the \ac{EEG} and the markers
+(\cref{sec:acquisition}), the trial table of the \ac{GUI} with the timestamps of all
+flips, and the decision log of the backend (\cref{app:protocol}).
 
 \section{Testing and verification}
 \label{sec:testing}
@@ -689,11 +604,10 @@ Most of the system was developed and tested without the \ac{EEG} cap (NFR4). The
 simulated \ac{EEG} stream publishes the eight channels of \cref{sec:hardware} at
 250\,Hz over \ac{LSL}, with the same labels as the cap. Every channel carries white
 Gaussian noise and, during the flicker of a trial, a sinusoid at the frequency of the
-target in the onset marker with its second and third harmonics, each scaled by a gain
-drawn once per channel. The response starts a set latency after the onset marker and
-ends the same latency after the end-of-flicker marker, and its phase relative to the
-onset is the same in every trial, as in a real \ac{SSVEP}. Its strength is set as a
-signal-to-noise ratio. The simulated stream thus plays a subject who always looks at
+target in the onset marker with its second and third harmonics, at a set
+signal-to-noise ratio. The response starts a set latency after the onset marker, ends
+the same latency after the end-of-flicker marker, and is phase-locked to the onset, as
+a real \ac{SSVEP}. The simulated stream thus plays a subject who always looks at
 the target of the onset marker; in free spelling, which has no target, it sends noise
 only. Neither the recorder nor the backend can tell it from the cap, so the whole chain
 from the \ac{GUI} to the recording and the classification runs without hardware.
@@ -752,9 +666,8 @@ a window, so the flicker test on the real screen runs before every session
 (\cref{sec:stimulus}), and the timing of every session is checked from its flip log
 (\cref{sec:timing-results}). The simulated stream is also kinder than the cap: its
 noise is white and stationary, it has no artifacts, and its timestamps agree with the
-markers. A lead of the timestamps of the cap, such as the 0.5\,s in my first session
-(\cref{sec:acquisition}), can therefore only be found with the cap, which is why every
-online session records its answer delay.
+markers, so a lead of the timestamps of the cap (\cref{sec:acquisition}) can only be
+found with the cap.
 
 \Cref{tab:verification} closes the loop with \cref{sec:requirements}: for every
 requirement, how it was verified and with what result.
@@ -772,14 +685,14 @@ requirement, how it was verified and with what result.
     FR2  & flip timestamps of the markers; cued targets recovered from a recording of the simulated stream & met for the markers; the \acs{EEG} timestamps of the cap led by about 0.5\,s in my first session (\cref{sec:acquisition}) \\
     FR3  & calibration with the cap & met: 60 trials without dropped frames \\
     FR4  & recordings read by the offline analysis & met (\cref{sec:own-recordings}) \\
-    FR5  & online session with the cap & met: classification in a median of 11\,ms \\
+    FR5  & online session with the cap & met: classification in a median of 11\,ms (\cref{sec:online-results}) \\
     FR6  & unit tests of the speller; simulated copying of 500 phrases & met: every phrase spelled \\
     FR7  & start-up option; test with the simulated stream; online session & met: 9 of 9 words accepted in the test, 11 words accepted online \\
     FR8  & copy-spelling with the cap & met: accuracy from the logs (\cref{sec:online-results}) \\
     FR9  & replay of the online session & met: logged decisions reproduced exactly \\
     \midrule
     NFR1 & flip logs of every session & met in the calibrations (no dropped frames); one dropped frame in 98 online trials (\cref{sec:timing-results}) \\
-    NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms; over the phrase set, suggestions at most 141\,ms (\cref{sec:lm-evaluation}) \\
+    NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms (\cref{sec:online-results}); over the phrase set, suggestions at most 141\,ms (\cref{sec:lm-evaluation}) \\
     NFR3 & one package for both paths; replay against the offline comparison & met: 239 of 240 \acs{CCA} and \acs{FBCCA} decisions identical \\
     NFR4 & simulated stream, replay, tests of the whole system & met \\
     NFR5 & all measurements on the laptop of \cref{sec:hardware} & met \\
