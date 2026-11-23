@@ -1,0 +1,109 @@
+%%% English version of the faculty template, loaded by thesis.tex right after settings.tex.
+%%% settings.tex is the faculty's file and stays as it is. Everything that differs because
+%%% this thesis is written in English is redefined here, plus page numbers on every page.
+%%% The thesis data (title, author, keywords, ...) is in thesis.tex.
+
+%% 1. TITLE PAGE
+% The template's \StronaTytulowa (settings.tex) with the same layout and English text.
+% Changes: the labels and names are in English, the title is \stTytulAng, and the page style
+% after the title page is plain (page numbers) instead of empty.
+\newcommand{\stRodzajPracyAng}{%
+  \ifnum\stCzyMgr=1 MASTER'S THESIS\else ENGINEERING THESIS\fi
+}
+
+\renewcommand{\StronaTytulowa}{
+  \pagenumbering{roman}
+  \sffamily
+  \begin{titlepage}
+    \newgeometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+    \begin{center}
+      {\LARGE\bfseries Wrocław University of Science and Technology \par}
+      \vspace{0.4cm}
+      {\Large Faculty of Information and Communication Technology \par}
+    \end{center}
+    \par\noindent\rule{\textwidth}{1pt}\par
+    \vspace{0.5cm}
+
+    {\large
+    \begin{tabular}{@{}ll}
+      Field of study: & \textbf{\stKierunek\ (\stKodKierunku)} \\
+      \ifdefempty{\stSpecjalnosc}{}{Specialization: & \textbf{\stSpecjalnosc\ (\stKodSpecjalnosci)}}
+    \end{tabular}
+    }
+
+    \vspace*{\fill}
+
+    \begin{center}
+      {\huge\bfseries \stRodzajPracyAng \par}
+      \vspace{2.0cm}
+      {\Large \bfseries \stTytulAng \par}
+      \vspace{1cm}
+      {\Large \stAutor \par}
+      \vspace{2cm}
+      {\large Supervisor:\par \textbf{\stOpiekun} \par}
+    \end{center}
+
+    \vspace*{\fill}
+
+    {\raggedright
+      \small Keywords: \textit{\stSlowaKluczowe}\par
+      \vspace{0.5em}
+      \par\noindent\rule{\textwidth}{1pt}\par
+    }
+
+    \begin{center}
+      \Large Wrocław \stRok
+    \end{center}
+
+    \restoregeometry
+  \end{titlepage}
+  \normalfont
+  \pagestyle{plain} % the template has \pagestyle{empty}: no page numbers
+}
+
+%% 2. PDF METADATA (file properties): English title, thesis type and keywords
+\renewcommand{\SetMetaData}{%
+  \AtBeginDocument{%
+    \hypersetup{%
+      pdfinfo = {%
+        Title    = {\stTytulAng},
+        Author   = {\stAutor},
+        Subject  = {\ifnum\stCzyMgr=1 Master's thesis\else Engineering thesis\fi},
+        Keywords = {\stSlowaKluczowe},
+        ModDate  = {\pdfcreationdate},
+        Creator  = {pdftex}
+      }
+    }
+  }
+}
+
+%% 3. ABSTRACTS
+% The template assumes Polish is the main language. Here English is (the babel option in
+% thesis.tex), so each abstract selects its own language and the text returns to English
+% after them. \AbstractENG from settings.tex already selects English.
+\renewenvironment{abstracts}{}{\selectlanguage{english}\clearpage}
+\renewcommand{\AbstractPL}{%
+  \selectlanguage{polish}%
+  \begin{center}{\Large\bfseries Streszczenie \par}\end{center}\vspace{0.5em}%
+}
+
+%% 4. PAGE NUMBERS ON EVERY PAGE EXCEPT THE TITLE PAGE
+% The template's \StronaTytulowa and \SpisTresci switch page numbers off, and nothing switches
+% them back on, so only chapter-opening pages had numbers. Here every page after the title
+% page has one: roman (ii, iii, ...) for the abstracts, contents and abbreviations, arabic
+% from Chapter 1 on (thesis.tex switches the numbering there, as in the template).
+\renewcommand{\SpisTresci}{\clearpage\tableofcontents\clearpage}
+
+%% 5. NAMES FOR \cref (settings.tex sets Polish ones)
+\crefname{figure}{Figure}{Figures}
+\Crefname{figure}{Figure}{Figures}
+\crefname{table}{Table}{Tables}
+\Crefname{table}{Table}{Tables}
+\crefname{equation}{Equation}{Equations}
+\Crefname{equation}{Equation}{Equations}
+\crefname{listing}{Listing}{Listings}
+\Crefname{listing}{Listing}{Listings}
+\crefname{algorithm}{Algorithm}{Algorithms}
+\Crefname{algorithm}{Algorithm}{Algorithms}
+\ifstAlgorithms \floatname{algorithm}{Algorithm} \fi

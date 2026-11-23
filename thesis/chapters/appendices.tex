@@ -28,7 +28,7 @@ the table.
 
 \begin{table}[tb]
   \centering
-  \caption{Markers of the calibration program and the speller \acs{GUI}. Each is
+  \caption{Markers of the calibration program and the speller \acs*{GUI}. Each is
     time-stamped with the flip that showed its event, or with the time it was sent if
     no flip shows it.}
   \label{tab:markers}
@@ -44,7 +44,7 @@ the table.
     \texttt{block\_end}     & the end of a block & block \\
     \texttt{session\_end}   & the end of the session & number of trials, whether the session was aborted \\
     \midrule
-    \multicolumn{3}{@{}l}{\textit{Speller \acs{GUI} only}} \\
+    \multicolumn{3}{@{}l}{\textit{Speller \acs*{GUI} only}} \\
     \texttt{state\_request} & every 0.5\,s until the first state of the backend arrives & none \\
     \texttt{feedback}       & the first flip of the feedback & trial, block, selected target, text \\
     \texttt{no\_answer}     & 3\,s after the flicker without an answer & trial, block \\
@@ -66,9 +66,9 @@ A recording is one compressed NumPy~\citep{harris2020numpy} file with the fields
     Field & Contents \\
     \midrule
     \ac{EEG}           & continuous signal of all columns of the stream, channels $\times$ samples, in \textmu V \\
-    sample times       & \acs{LSL} timestamp of every sample, in seconds \\
-    markers            & the \acs{JSON} marker strings as received \\
-    marker times       & \acs{LSL} timestamp of every marker, in seconds \\
+    sample times       & \acs*{LSL} timestamp of every sample, in seconds \\
+    markers            & the \acs*{JSON} marker strings as received \\
+    marker times       & \acs*{LSL} timestamp of every marker, in seconds \\
     channels           & label of every column \\
     sampling rate      & nominal sampling rate of the stream, in Hz \\
     \bottomrule

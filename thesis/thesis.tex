@@ -1,116 +1,88 @@
-% Engineering thesis: main file.
-%
-% Build (4 runs, so references and the bibliography resolve):
-%   pdflatex thesis && bibtex thesis && pdflatex thesis && pdflatex thesis
-% or, with latexmk installed:  latexmk -pdf thesis.tex
-%
-% Chapters are in chapters/, figures in figures/, the bibliography in references.bib
-% (exported by Zotero + Better BibTeX). Page layout and title page: CHECK against the
-% faculty's rules or template, and replace them if the faculty provides one.
+%% Engineering thesis: main file, built on the WIT PWr thesis template
+%% (thesis_templates/szablonwitpd, 25.02.2026). Its layout follows the template's main.tex.
+%%
+%% Build:  latexmk -pdf thesis.tex
+%%   or:   pdflatex thesis && bibtex thesis && pdflatex thesis && pdflatex thesis
+%%
+%% Files: settings.tex (the faculty's page layout, fonts, title page and macros),
+%% settings-en.tex (the English version of the template: title page, PDF metadata,
+%% abstracts, \cref names, page numbers), abstract.tex, acronyms.tex, chapters/,
+%% figures/, references.bib (exported by Zotero + Better BibTeX).
 
-\documentclass[12pt,a4paper,oneside]{report}
+\documentclass[12pt, a4paper, twoside, titlepage]{report}
 
-% ---------- Language and fonts --------------------------------------------------
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage[polish,english]{babel}  % the last one is the main language
-\usepackage{csquotes}               % \enquote{...} gives correct quotation marks
-\usepackage{microtype}
+% Options for packages that settings.tex loads (they must come before it)
+\PassOptionsToPackage{main=english}{babel}           % English text, Polish for the Streszczenie
+\PassOptionsToPackage{capitalise,noabbrev}{cleveref} % \cref{fig:x} -> Figure 3.1
 
-% ---------- Page layout (CHECK the faculty's rules) ---------------------------------
-\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=3.5cm,right=2.5cm,marginparwidth=2cm]{geometry}
-\usepackage{setspace}
-\onehalfspacing
+% Bibliography: loaded before settings.tex, so that hyperref (loaded there) links the citations
+\RequirePackage[numbers,sort&compress]{natbib} % \citep{key} -> [1], \citet{key} -> Wang et al. [1]
 
-% ---------- Maths ------------------------------------------------------------------
-\usepackage{amsmath,amssymb,mathtools}
+\input{settings}    % the faculty template: page layout, fonts and macros
+\input{settings-en} % its English version: title page, PDF metadata, abstracts, \cref names
+
+%% THESIS DATA (printed on the title page and in the PDF metadata)
+
+\newcommand{\stKierunek}{Algorithmic Computer Science}
+\newcommand{\stKodKierunku}{INA}
+\newcommand{\stSpecjalnosc}{} % leave empty if there is no specialization
+\newcommand{\stKodSpecjalnosci}{} % the codes of fields and specializations are on the WIT pages
+\newcommand{\stCzyMgr}{0} % 1 = master's thesis, 0 = engineering thesis
+\newcommand{\stTytulAng}{Design and Implementation of a Real-Time Brain–Computer Interface for
+  Predictive EEG-Based Communication Using Machine Learning and Natural Language Processing}
+\newcommand{\stTytulPL}{Projekt i implementacja interfejsu mózg–komputer działającego w czasie
+  rzeczywistym do predykcyjnej komunikacji opartej na EEG z wykorzystaniem uczenia maszynowego
+  i przetwarzania języka naturalnego} % not printed: the title page is in English
+\newcommand{\stAutor}{Michał Szandarowski}
+\newcommand{\stOpiekun}{dr inż. Michał Kędziora}
+\newcommand{\stSlowaKluczowe}{brain–computer interface, BCI, electroencephalography, EEG,
+  steady-state visual evoked potentials, SSVEP, real-time signal processing, spatial
+  filtering, CCA, TRCA, machine learning, natural language processing, text prediction,
+  information transfer rate, ITR, assistive communication}
+\newcommand{\stRok}{2026} % year of submission
+
+\SetMetaData % PDF metadata (title, author, keywords)
+
+%% PACKAGES USED BY THE THESIS (on top of settings.tex)
+\IfPackageLoadedTF{newtxmath}{}{\usepackage{amssymb}} % newtxmath already defines these symbols
 \usepackage{bm}
-
-% ---------- Figures, tables, diagrams ---------------------------------------------
-\usepackage{graphicx}
 \graphicspath{{figures/}}
 \usepackage{booktabs,tabularx,multirow}
-\usepackage[font=small,labelfont=bf]{caption}
-\usepackage{subcaption}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit}
-
-% ---------- Lists and code ---------------------------------------------------------
 \usepackage{enumitem}
-\usepackage{listings}
-\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,frame=single}
+\usepackage{xurl}
 
-% ---------- Bibliography ------------------------------------------------------------
-\usepackage[numbers,sort&compress]{natbib}  % \citep{key} -> [1], \citet{key} -> Wang et al. [1]
-\bibliographystyle{unsrtnat}                % numbered in order of first citation
-\usepackage[nottoc]{tocbibind}               % bibliography and lists in the table of contents
+%% OBSŁUGA BIBLIOGRAFII (bibliography: natbib is loaded at the top of this file)
+\bibliographystyle{unsrtnat} % numbered in order of first citation, like the template's sorting=none
 
-% ---------- Abbreviations -----------------------------------------------------------
-\usepackage[printonlyused]{acronym}  % \ac{SSVEP}: long form at first use, short after
+%% AKRONIMY (skróty;synonimy)
+\input{acronyms}
 
-% ---------- Draft helpers (switch to [disable] for the final version) --------------
+%% DRAFT HELPERS (switch todonotes to [disable] for the final version)
 \usepackage[colorinlistoftodos]{todonotes}
 \newcommand{\missing}[1]{\todo[inline,color=red!15]{Missing: #1}}
-
-% ---------- Links and cross-references (load last) ---------------------------------
-\usepackage{xurl}
-\usepackage[hidelinks]{hyperref}
-\usepackage[capitalise,noabbrev]{cleveref}  % \cref{fig:x} -> Figure 3.1
-
-% ---------- Thesis data (fill in) ---------------------------------------------------
-\newcommand{\thesistitle}{Design and Implementation of a Real-Time Brain--Computer
-  Interface for Predictive EEG-Based Communication Using Machine Learning and Natural
-  Language Processing}
-\newcommand{\thesistitlepl}{Projekt i implementacja interfejsu mózg–komputer działającego w czasie rzeczywistym do predykcyjnej komunikacji opartej na EEG z wykorzystaniem uczenia maszynowego i przetwarzania języka naturalnego}
-\newcommand{\thesisauthor}{Michał Szandarowski}
-\newcommand{\albumnumber}{279777}
-\newcommand{\supervisor}{dr inż. Michał Kędziora}
-\newcommand{\university}{Wroclaw University of Science and Technology}
-\newcommand{\faculty}{W4N}
-\newcommand{\fieldofstudy}{algorithmic computer science}
-\newcommand{\thesisplace}{Wrocław}
-\newcommand{\thesisyear}{2026}
-
-\hypersetup{pdftitle={\thesistitle},pdfauthor={\thesisauthor}}
 
 % Build only the chapters you are working on (faster). Comment out for the full thesis.
 % \includeonly{chapters/03_system}
 
+%% TU ZACZYNA SIĘ DOKUMENT
+
 \begin{document}
 
-% ---------- Title page (replace with the faculty's template if there is one) -------
-\begin{titlepage}
-  \centering
-  {\large \university\par}
-  {\large \faculty\par}
-  \vspace{0.5cm}
-  {\large Field of study: \fieldofstudy\par}
-  \vspace{2.5cm}
-  {\Large Engineering thesis\par}
-  \vspace{1cm}
-  {\LARGE\bfseries \thesistitle\par}
-  \vspace{0.8cm}
-  {\large\itshape \thesistitlepl\par}
-  \vspace{2.5cm}
-  {\Large \thesisauthor\par}
-  {\large Album number: \albumnumber\par}
-  \vfill
-  {\large Supervisor: \supervisor\par}
-  \vspace{1.5cm}
-  {\large \thesisplace, \thesisyear\par}
-\end{titlepage}
+%% NIE RUSZAJ NASTĘPNYCH TRZECH LINIJEK %%
+\StronaTytulowa
+\include{abstract} % plik abstrakt.txt edytujesz samodzielnie
+\SpisTresci
 
-% ---------- Front matter ------------------------------------------------------------
-% Declaration of authorship and of AI-tool use: CHECK what the faculty requires and where.
-\pagenumbering{roman}
-\input{chapters/abstract}
-\tableofcontents
-\input{chapters/acronyms}
+%%% Tutaj wyświetlamy listę akronimów
+%%  jako parametr (template) możesz wybrać: lof, toc, description
+%%%
+\ShowAcronyms{lof}
 
-% ---------- Main text ---------------------------------------------------------------
-\clearpage
-\pagenumbering{arabic}
+\pagenumbering{arabic}  %% NIE RUSZAJ TEGO
+
+%% TU JEST MIEJSCE NA DOŁĄCZENIE TWOICH ROZDZIAŁÓW
 \include{chapters/01_introduction}
 \include{chapters/02_background}
 \include{chapters/03_system}
@@ -119,14 +91,15 @@
 \include{chapters/06_results}
 \include{chapters/07_conclusions}
 
-
-% ---------- Back matter (CHECK the required order) ----------------------------------
-
+%% TU WYWOŁUJEMY BIBLIOGRAFIĘ
 \bibliography{references}
-\listoffigures
-\listoftables
 
+%% TU ZACZYNAJĄ SIĘ ZAŁĄCZNIKI
 \appendix
 \include{chapters/appendices}
+
+%% --- Spisy ---
+\listoffigures
+\listoftables
 
 \end{document}

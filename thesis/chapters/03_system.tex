@@ -35,21 +35,21 @@ system does, and the non-functional requirements, which constrain how it does it
     \midrule
     \multicolumn{2}{@{}l}{\textit{Functional requirements}} \\
     FR1 & present six targets flickering at chosen frequencies between 8 and 15\,Hz, not limited to divisors of the refresh rate \\
-    FR2 & timestamp every stimulus event on the same clock as the \acs{EEG} \\
-    FR3 & run a calibration session that records labelled \acs{EEG} trials for training the classifier \\
-    FR4 & record the \acs{EEG} and the stimulus events to a file for offline analysis \\
+    FR2 & timestamp every stimulus event on the same clock as the \acs*{EEG} \\
+    FR3 & run a calibration session that records labelled \acs*{EEG} trials for training the classifier \\
+    FR4 & record the \acs*{EEG} and the stimulus events to a file for offline analysis \\
     FR5 & classify each selection in real time and show the selected target to the user \\
     FR6 & let the user type any English text with only six targets: the 26 letters, space and backspace, a way to undo a wrong selection, and accepting a suggested word \\
     FR7 & suggest words from a language model that can be switched on and off, so that the online experiment can compare both conditions \\
-    FR8 & support copy-spelling of a given phrase: cue the next correct target and log it as the ground truth for accuracy and \acs{ITR} \\
+    FR8 & support copy-spelling of a given phrase: cue the next correct target and log it as the ground truth for accuracy and \acs*{ITR} \\
     FR9 & replay a recording offline through the online processing pipeline \\
     \midrule
     \multicolumn{2}{@{}l}{\textit{Non-functional requirements}} \\
     NFR1 & keep the stimulus timing precise, with no dropped frames in normal operation \\
     NFR2 & finish the classification and the word suggestions within the 0.5\,s gaze shift \\
-    NFR3 & process and classify the \acs{EEG} identically offline and online \\
-    NFR4 & be testable end to end without the \acs{EEG} cap \\
-    NFR5 & run on a consumer laptop using only its processor and integrated graphics, with a low-cost dry-electrode \acs{EEG} cap \\
+    NFR3 & process and classify the \acs*{EEG} identically offline and online \\
+    NFR4 & be testable end to end without the \acs*{EEG} cap \\
+    NFR5 & run on a consumer laptop using only its processor and integrated graphics, with a low-cost dry-electrode \acs*{EEG} cap \\
     NFR6 & be publicly available, with automated tests that run on every commit (continuous integration) \\
     NFR7 & be used only after the user has been warned about the risk of photosensitive epilepsy \\
     \bottomrule
@@ -118,17 +118,17 @@ can record any session, and the backend can replay a recording without the \ac{G
         minimum height=1.5cm, font=\footnotesize},
       stream/.style={-{Stealth[length=2.2mm]}, thick},
       lbl/.style={font=\footnotesize}]
-    \node[proc] (backend) {\textbf{Backend}\\ring buffer, classifier,\\speller state, \acs{LM}};
-    \node[proc, left=2.0cm of backend] (gui) {\textbf{\acs{GUI}}\\stimulus, frame clock,\\labels and text};
-    \node[proc, right=2.0cm of backend] (source) {\textbf{\acs{EEG} source}\\cap software or\\simulated stream};
-    \node[proc, below=1.5cm of backend] (rec) {\textbf{Recorder}\\\acs{EEG} and markers\\$\rightarrow$ recording file};
+    \node[proc] (backend) {\textbf{Backend}\\ring buffer, classifier,\\speller state, \acs*{LM}};
+    \node[proc, left=2.0cm of backend] (gui) {\textbf{\acs*{GUI}}\\stimulus, frame clock,\\labels and text};
+    \node[proc, right=2.0cm of backend] (source) {\textbf{\acs*{EEG} source}\\cap software or\\simulated stream};
+    \node[proc, below=1.5cm of backend] (rec) {\textbf{Recorder}\\\acs*{EEG} and markers\\$\rightarrow$ recording file};
     \draw[stream] ([yshift=2.5mm]gui.east) -- node[lbl, above] {markers} ([yshift=2.5mm]backend.west);
     \draw[stream] ([yshift=-2.5mm]backend.west) -- node[lbl, below] {state} ([yshift=-2.5mm]gui.east);
-    \draw[stream] (source.west) -- node[lbl, above] {\acs{EEG}} (backend.east);
+    \draw[stream] (source.west) -- node[lbl, above] {\acs*{EEG}} (backend.east);
     \draw[stream] (gui.south) |- node[lbl, pos=0.75, below] {markers} (rec.west);
-    \draw[stream] (source.south) |- node[lbl, pos=0.75, below] {\acs{EEG}} (rec.east);
+    \draw[stream] (source.south) |- node[lbl, pos=0.75, below] {\acs*{EEG}} (rec.east);
   \end{tikzpicture}
-  \caption{Processes of the system and the \acs{LSL} streams between them. The
+  \caption{Processes of the system and the \acs*{LSL} streams between them. The
     recorder only listens, so it records calibration and online sessions alike.}
   \label{fig:architecture}
 \end{figure}
@@ -301,7 +301,7 @@ The system uses a two-level speller layout with six targets (\cref{fig:layout}).
     typed text below it, and the red frame cues the next target. Each square of the
     first level previews its group: letters on a small ring, where each will be at the
     second level, and the suggestions as lines. The labels are hidden during the
-    flicker. Screenshots of the \acs{GUI}, cropped to the ring.}
+    flicker. Screenshots of the \acs*{GUI}, cropped to the ring.}
   \label{fig:layout}
 \end{figure}
 
@@ -386,7 +386,7 @@ event to the recorder; no backend runs during calibration (\cref{sec:architectur
 \begin{figure}[tb]
   \centering
   \includegraphics[width=0.75\textwidth]{figures/calibration_cue.png}
-  \caption{The calibration \acs{GUI} during the cue of a trial: the red frame marks the
+  \caption{The calibration \acs*{GUI} during the cue of a trial: the red frame marks the
     target of the trial, here 10.8\,Hz, and the squares are at rest. The frequency of
     each square is written on its side facing the centre (\cref{tab:targets}).
     Screenshot cropped to the ring.}
@@ -467,7 +467,7 @@ markers and their fields.
       in copy-spelling.}
     \label{fig:trial-online}
   \end{subfigure}
-  \caption{Timeline of one trial with the markers the \acs{GUI} sends (above the
+  \caption{Timeline of one trial with the markers the \acs*{GUI} sends (above the
     bars), on the same time scale.}
   \label{fig:trials}
 \end{figure}
@@ -682,7 +682,7 @@ requirement, how it was verified and with what result.
     ID & Verified by & Result \\
     \midrule
     FR1  & unit tests of the luminance sequence; flicker test on the real screen & met: 8.0--15.0\,Hz, four of the six frequencies not divisors of 120\,Hz (\cref{tab:targets}) \\
-    FR2  & flip timestamps of the markers; cued targets recovered from a recording of the simulated stream & met for the markers; the \acs{EEG} timestamps of the cap led by about 0.5\,s in my first session (\cref{sec:acquisition}) \\
+    FR2  & flip timestamps of the markers; cued targets recovered from a recording of the simulated stream & met for the markers; the \acs*{EEG} timestamps of the cap led by about 0.5\,s in my first session (\cref{sec:acquisition}) \\
     FR3  & calibration with the cap & met: 60 trials without dropped frames \\
     FR4  & recordings read by the offline analysis & met (\cref{sec:own-recordings}) \\
     FR5  & online session with the cap & met: classification in a median of 11\,ms (\cref{sec:online-results}) \\
@@ -693,7 +693,7 @@ requirement, how it was verified and with what result.
     \midrule
     NFR1 & flip logs of every session & met in the calibrations (no dropped frames); one dropped frame in 98 online trials (\cref{sec:timing-results}) \\
     NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms (\cref{sec:online-results}); over the phrase set, suggestions at most 141\,ms (\cref{sec:lm-evaluation}) \\
-    NFR3 & one package for both paths; replay against the offline comparison & met: 239 of 240 \acs{CCA} and \acs{FBCCA} decisions identical \\
+    NFR3 & one package for both paths; replay against the offline comparison & met: 239 of 240 \acs*{CCA} and \acs*{FBCCA} decisions identical \\
     NFR4 & simulated stream, replay, tests of the whole system & met \\
     NFR5 & all measurements on the laptop of \cref{sec:hardware} & met \\
     NFR6 & public repository; 624 tests in continuous integration & met \\

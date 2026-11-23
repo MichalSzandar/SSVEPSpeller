@@ -1,0 +1,62 @@
+%%% List of abbreviations, with the acro package as in the faculty template.
+%%% Use \ac{KEY} in the text: the first use prints "long form (SHORT)", later uses print
+%%% "SHORT". \acp{KEY} = plural. \acs*{KEY} = short form only, without counting as the first
+%%% use (in acro, plain \acs{KEY} counts as the first use, unlike in the old acronym package).
+%%% Only the abbreviations used in the text are printed, sorted by their short form.
+%%% Compile a few times so the list and its page numbers settle.
+
+\RequirePackage{acro}
+
+% Width of the short-form column in the list (acro's lof style takes the list-of-figures
+% layout, 2.3em wide, which is too narrow for FB-eTRCA or SSVEP).
+\makeatletter
+\renewcommand*{\l@acro}{\@dottedtocline{1}{1.5em}{5.5em}}
+\makeatother
+
+%% Uważaj na formatowanie;
+%% Nie zapomnij o przecinkach
+
+\DeclareAcronym{ALS}{short = ALS, long = amyotrophic lateral sclerosis}
+\DeclareAcronym{BCI}{short = BCI, long = brain--computer interface}
+\DeclareAcronym{CCA}{short = CCA, long = canonical correlation analysis}
+\DeclareAcronym{CI}{short = CI, long = continuous integration}
+\DeclareAcronym{EEG}{short = EEG, long = electroencephalography}
+\DeclareAcronym{eTRCA}{short = eTRCA, long = ensemble task-related component analysis}
+\DeclareAcronym{FBCCA}{short = FBCCA, long = filter bank canonical correlation analysis}
+\DeclareAcronym{FBeTRCA}{short = FB-eTRCA, long = filter bank ensemble task-related component analysis}
+\DeclareAcronym{GUI}{short = GUI, long = graphical user interface}
+\DeclareAcronym{GPU}{short = GPU, long = graphics processing unit}
+\DeclareAcronym{ITR}{short = ITR, long = information transfer rate}
+\DeclareAcronym{JSON}{short = JSON, long = JavaScript Object Notation}
+\DeclareAcronym{LDA}{short = LDA, long = linear discriminant analysis}
+\DeclareAcronym{LM}{short = LM, long = language model}
+\DeclareAcronym{LSL}{short = LSL, long = Lab Streaming Layer}
+\DeclareAcronym{NIRS}{short = NIRS, long = near-infrared spectroscopy}
+\DeclareAcronym{NLP}{short = NLP, long = natural language processing}
+\DeclareAcronym{PSD}{short = PSD, long = power spectral density}
+\DeclareAcronym{SNR}{short = SNR, long = signal-to-noise ratio}
+\DeclareAcronym{SSVEP}{short = SSVEP, long = steady-state visual evoked potential}
+\DeclareAcronym{TRCA}{short = TRCA, long = task-related component analysis}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% NIE RUSZAJ TEGO CO JEST NIŻEJ JEŚLI  %%%
+%% NIE ZNASZ ZBYT DOBRZE LATEX'A        %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% [thesis] Only change from the template: the heading is in English.
+\newcommand{\ShowAcronyms}[1]{
+  \begin{center}
+    {\Large\bfseries List of abbreviations \par}
+  \end{center}
+  \vspace{0.5em}
+
+  \ifboolexpr{
+      test {\ifstrequal{#1}{lof}} or
+      test {\ifstrequal{#1}{toc}} or
+      test {\ifstrequal{#1}{description}}
+    }{%
+      \printacronyms[sort=true, heading=none, template=#1]
+    }{%
+      \printacronyms[sort=true, heading=none, template=lof]
+     }%
+  \clearpage
+}
