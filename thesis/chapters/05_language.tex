@@ -9,34 +9,213 @@
 \label{ch:language}
 
 In this chapter I will focus on integrating a language model into the \ac{BCI} system. 
-The language model is used to improve the overall \ac{ITR} and accuracy.
+The language model is used to improve the overall \ac{ITR} by reducing the number of 
+keystrokes required to type a word, and by correcting misclassifications made by the classifier.
 
 \section{Why a language model}
 \label{sec:why-lm}
 
-Despite the fact, that \ac{ITR} and accuracy results from the benchmark dataset were very promising, and most classification methods
-were able to achieve 100\% accuracy over a 0.5 s window, the data collected from my offline experiments showed that 
-those numbers are unreachable on consumer-grade EEG devices. The main reason for this is the low \ac{SNR} of the EEG signal, 
-which is further worsened by the fact that the \ac{SSVEP} response is not always present in every trial. This leads to a high 
-number of misclassifications, which in turn leads to a low \ac{ITR}.
+Despite the fact, that \ac{ITR} and accuracy results from the benchmark dataset were 
+very promising, and classification methods from TRCA family were able to achieve over 
+90\% accuracy over a 0.5 s window, the data collected from my offline experiments showed that 
+those numbers are unreachable on consumer-grade EEG devices. The main reason for this 
+is the low \ac{SNR} of the EEG signal. This leads to a high number of 
+misclassifications, which in turn leads to a low \ac{ITR}. 
 
 My solution to this problem is to integrate a language model into the \ac{BCI} system.
 The language model has two roles here:
 \begin{enumerate}
-    \item It can predict the next words based on current context, top 3 suggestions are displayed to the user, and the user can select one of them instead of spelling the whole word.
-    \item It is a part of a fusion model, which combines the output of the classifier with the output of the language model to predict next target. 
+    \item It can predict the next words based on current context, top 3 suggestions 
+    are displayed to the user, and the user can select one of them instead of spelling the whole word.
+    \item It is a part of a fusion model, which combines the output of the classifier 
+    with the output of the language model to predict next target. 
     This way, even if the classifier misclassifies the target, the language model can correct it based on the context.
 \end{enumerate}
 
 \section{Word completion}
-
 \label{sec:completion}
+
+The base for word completion is a unigram model~\citep{garayvitoria2006survey}. A
+unigram model gives every word a probability proportional to its frequency in a large
+collection of text~\citep{jurafsky2009slp}. It serves as a baseline because it does not
+take the context into account: it cannot predict a word from the words typed before it,
+which the transformer of \cref{sec:reranking} does.
+
+After every selection that changes the text, the system splits the text into a context
+and a prefix. The prefix is the word currently being typed, that is, everything after
+the last space, and it is empty right after a space. The context is everything before
+the prefix. This model uses only the prefix: it completes the word being typed rather
+than predicting the next one.
+
+The vocabulary and the word frequencies come from the wordfreq
+library~\citep{speer2022wordfreq}, which combines word counts from Wikipedia, film
+subtitles, news, books, web pages, Twitter and Reddit. I took its 50\,000 most frequent
+English words and kept only those made of the letters A--Z, in upper case, because the
+speller cannot type any other characters. After removing the other words, mostly
+contractions such as DON'T and numbers, the vocabulary contains 47\,973 words.
+
+The candidates for a prefix~$p$ are the vocabulary words that start with $p$, apart
+from $p$ itself:
+\begin{equation}
+    C(p) = \{\, w \in V : w \text{ starts with } p,\ w \neq p \,\},
+    \label{eq:unigram-candidates}
+\end{equation}
+where $V$ is the vocabulary. The unigram model then chooses the three candidates with
+the highest probability and displays them to the user. Candidates with equal frequency
+keep the order of the wordfreq list. Only three suggestions are displayed because they
+share one group with space, backspace and back (\cref{sec:layout}), which leaves three
+cells for words. The prefix itself is excluded from the candidates because it is already
+typed: accepting it would only add a space, which the space cell already does.
+
+The problem, however, is that since the unigram model does not take the context into 
+account, it can suggest words that are not relevant to the current sentence. 
+For example, after each space the model will always suggest words "THE", "TO", "AND" 
+because they are the most frequent words in the English language, even if they do 
+not make sense in the current context. To solve this problem, I will use a transformer 
+model to re-rank the suggestions based on the context.
 
 \section{Transformer re-ranking}
 \label{sec:reranking}
 
+The transformer model~\citep{vaswani2017attention} I use is distilgpt2, a small version
+of GPT-2~\citep{radford2019gpt2,sanh2019distilbert}. Given the text before it, the
+\ac{LM} gives a probability distribution over the next token. Tokens are pieces of
+words: the model's vocabulary has 50\,257 of them, built by byte-level byte-pair
+encoding~\citep{radford2019gpt2}, so a common word is usually one token and a rarer
+word several. The model is small enough to run in real time on the laptop's processor,
+within the 0.5\,s gaze shift. It has 81.9 million parameters, compared to 124 million
+in the smallest GPT-2, from which it was distilled, and 1.5 billion in the
+largest~\citep{radford2019gpt2,distilgpt2card}. It was trained on OpenWebTextCorpus, an
+open reproduction of the WebText data set used to train GPT-2~\citep{distilgpt2card},
+with knowledge distillation: the smaller model learns to reproduce the predictions of
+the larger one, which makes it smaller and faster~\citep{sanh2019distilbert}.
+
+The \ac{LM} scores a word $w$ given the context~$c$ by its log-probability
+$\log P(w \mid c)$. Because a word can consist of several tokens, this is the sum of
+the log-probabilities of its tokens, each given everything before it:
+\begin{equation}
+    \log P(w \mid c) = \sum_{j=1}^{m} \log P(t_j \mid t_0, c, t_1, \dots, t_{j-1}),
+    \label{eq:lm-score}
+\end{equation}
+where $t_1, \dots, t_m$ are the tokens of $w$ and $t_0$ is the model's
+beginning-of-text token.
+
+The \ac{LM} was trained on normal text, but the speller types only upper-case letters.
+Before scoring, I therefore rewrite the context together with the candidate word as
+normal text: everything is converted to lower case, except the first letter of the text
+and the word \enquote{I}, so that \enquote{I LIVE IN NEW YORK} becomes \enquote{I live
+in new york}. This way, the model can use its knowledge of normal text, while the user
+still sees only upper-case letters: the model only scores the words of the unigram
+model, which are already in upper case, and never produces text itself. I also cut the
+context to its last 20 words, because the model reads the whole context on every call,
+so a longer context makes each call slower. This limit was not tuned, and it only
+matters in free spelling: every copy phrase starts with an empty text, and the longest
+phrase of the phrase set has nine words.
+
+The re-ranker takes the 30 most frequent candidates for the prefix from the unigram
+model and re-ranks them by their score from \cref{eq:lm-score}. The three best
+candidates are then displayed to the user. This way, the suggestions are not only the
+most frequent words, but also the ones that make sense in the current context.
+
+The limit of this approach is that reranker can only rerank the top 30 candidates from 
+the unigram model. If the correct word is not among them, it will not be suggested. 
+This may sometimes happen with rare words.
+
 \section{Fusion with the classifier}
 \label{sec:fusion}
+
+The fusion model combines the outputs of the classifier and the language model to
+select the next target. Following Bayes' rule~\citep{speier2016review}, the probability
+$p_k$ that the classifier gives target~$k$ from the \ac{EEG} is multiplied by the prior
+probability $q_k$ of that target given the text typed so far, which comes from the
+language model and is described below:
+\begin{equation}
+    P(k \mid \mathbf{X}, \text{text}) = \frac{p_k\, q_k}{\sum_{j=1}^{N_t} p_j\, q_j},
+    \label{eq:fusion}
+\end{equation}
+and the target with the highest posterior probability is selected.
+
+The problem is that the classifier does not output probabilities over the targets,
+but a score for each target (\cref{ch:processing}), such as a correlation coefficient.
+To convert the scores into probabilities, I use a softmax function with a temperature
+parameter~\citep{hinton2015distilling}:
+\begin{equation}
+    p_k = P(k \mid \mathbf{X}) = \frac{\exp(s_k / \theta)}{\sum_{j=1}^{N_t} \exp(s_j / \theta)},
+    \label{eq:softmax}
+\end{equation}
+where $s_k$ is the score of target~$k$, $N_t$ is the number of targets and $\theta$ is
+the temperature. A higher temperature makes the distribution more uniform, while a
+lower temperature makes it more peaked. The temperature changes only how confident the
+probabilities are, not which target has the highest one, so it does not change the
+decisions of the classifier alone. In the fusion, however, it sets how much the
+\ac{EEG} weighs against the prior.
+
+I fit the temperature on the calibration data, as in temperature
+scaling~\citep{guo2017calibration}. Each calibration trial is first scored by a
+classifier that was not trained on it: the trials are split into five folds of
+consecutive blocks, and each fold is scored by a classifier trained on the other four.
+On its own training trials, the classifier would look more reliable than it is. The
+temperature is then the value that minimises the negative log-likelihood of the true
+targets:
+\begin{equation}
+    \hat{\theta} = \arg\min_{\theta} \left( -\frac{1}{N} \sum_{h=1}^{N} \log P_\theta(y_h \mid \mathbf{X}_h) \right),
+    \label{eq:temperature}
+\end{equation}
+where $N$ is the number of calibration trials, $y_h$ is the true target of trial~$h$,
+$\mathbf{X}_h$ is its \ac{EEG} window and $P_\theta$ is \cref{eq:softmax} with
+temperature~$\theta$. A temperature that is too low gives the true target of a
+misclassified trial a probability close to zero, which this loss penalises heavily. A
+temperature that is too high gives every target a probability close to $1/N_t$ in
+every trial. The minimum lies in between, where the classifier is about as confident
+as it is accurate. Online, the temperature is fitted in the same way when the backend
+starts (\cref{sec:online}).
+
+Another problem is that the language model does not give probabilities over the targets,
+but over the words in its vocabulary. The targets, however, are not words: at the
+second level each target shows one cell of the speller, and at the first level a whole
+group of cells (\cref{sec:layout}). The cells contain letters, space, backspace, back
+and the suggested words. The prior is therefore computed in three steps.
+
+First, every cell gets a probability from the word frequencies of the unigram model
+(\cref{sec:completion}). I assume that the user is typing a vocabulary word that starts
+with the prefix~$p$, with a probability proportional to its frequency~$f(w)$. Each such
+word leads to the cell the user would select next: its word cell if it is one of the
+suggestions, space if it is the prefix itself, and otherwise the letter that follows
+the prefix in it. Let $W(p)$ be the vocabulary words that start with $p$, including $p$
+itself if it is a word, and $a(w)$ the cell that word~$w$ leads to. The probability of
+cell~$a$ is then
+\begin{equation}
+    P(a \mid \text{text}) = (1 - \varepsilon)\,
+    \frac{\sum_{w \in W(p),\ a(w) = a} f(w)}{\sum_{w \in W(p)} f(w)},
+    \label{eq:cell-probs}
+\end{equation}
+and backspace gets the fixed probability $\varepsilon = 0.1$ that the user is correcting
+a mistake. If no vocabulary word starts with the prefix, for example after a typo or
+in a name, the letters and space share $1 - \varepsilon$ equally. This prior uses only
+the prefix and the word frequencies, not the context or the transformer of
+\cref{sec:reranking}.
+
+Second, the probabilities of the cells are turned into probabilities of the targets.
+At the first level, target~$k$ shows a group~$G_k$, and its probability is the sum
+over the cells of that group:
+\begin{equation}
+    q_k^{\mathrm{LM}} = \sum_{a \in G_k} P(a \mid \text{text}).
+    \label{eq:target-prior}
+\end{equation}
+At the second level, each target shows a single cell. Back, if the open group has one,
+then gets the probability~$\varepsilon$ that the group is the wrong one, and the other
+cells of the group share the rest in proportion to their probabilities.
+
+Finally, part of the prior is spread evenly over the targets:
+\begin{equation}
+    q_k = (1 - \lambda)\, q_k^{\mathrm{LM}} + \frac{\lambda}{N_t},
+    \label{eq:floor}
+\end{equation}
+with $\lambda = 0.3$. Without this floor, many targets would get a prior of exactly
+zero, for example a group whose letters continue no vocabulary word, and the \ac{EEG}
+could never select them, so names and typos could not be typed. With $\lambda = 0.3$
+and six targets, every target keeps a prior between 0.05 and 0.75, so the language
+model can change the odds between two targets by at most a factor of 15.
 
 \section{Offline evaluation}
 \label{sec:lm-evaluation}
