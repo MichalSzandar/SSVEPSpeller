@@ -11,17 +11,86 @@
 \section{Motivation}
 \label{sec:motivation}
 
+The motivation for this work stems from the need to improve communication options for
+individuals with severe motor impairments. The system is designed specifically for
+those with \ac{ALS} or locked-in syndrome. These individuals often retain their cognitive
+function but cannot communicate effectively, because they have lost voluntary control of
+their muscles. A \ac{BCI} can provide a means of communication by translating \ac{EEG}
+signals into commands, enabling users to spell words and sentences without relying on
+traditional input methods. The system is based on the \ac{SSVEP} paradigm, which is known
+for its high \ac{ITR} and its robustness in \ac{BCI} applications. By integrating machine
+learning and \ac{NLP} techniques, the system aims to enhance communication efficiency,
+reduce user fatigue, and improve the overall user experience.
+
 \section{Problem statement}
 \label{sec:problem}
+
+Several similar systems have been described in the literature, but most of them are
+laboratory systems that depend on high-end \ac{EEG} equipment (64 channels with gel
+electrodes) and do not use language models to enhance communication. My goal is to
+develop a more accessible and practical \ac{BCI} system that can be used with
+consumer-grade \ac{EEG} devices and uses language models to improve the speed and accuracy
+of communication. This work addresses the challenge of creating a real-time \ac{BCI}
+system that is both effective and user-friendly, and therefore suitable for individuals
+with severe motor impairments who rely on such technology to communicate.
 
 \section{Aim and scope}
 \label{sec:aim}
 
-\section{Contributions}
-\label{sec:contributions}
+The aim of this thesis is to design and implement a real-time \ac{BCI} system that
+enables predictive communication based on \ac{EEG} signals. The system should accurately
+detect which target the user is looking at by analysing the \ac{SSVEP} responses, and
+integrate machine learning and \ac{NLP} techniques to make communication more efficient.
+
+The system has a \ac{GUI} that shows the user a two-level menu with six flickering targets
+on each level. The first level consists of six groups with six options each. The options
+are the letters A--Z (English alphabet only), space, backspace and three word suggestions.
+The user selects a group on the first level and then a letter or a word on the second
+level.
+
+The topic card of the thesis lists seven tasks, which also give the order of the chapters:
+\begin{enumerate}
+  \item a review of the current literature on \ac{BCI} systems, \ac{SSVEP} paradigms and
+        real-time \ac{EEG} signal processing methods (\cref{ch:background});
+  \item the design and implementation of a \ac{GUI} with precise stimulation timing
+        (\cref{ch:system});
+  \item the implementation of an \ac{API} for real-time hardware integration and \ac{EEG}
+        data acquisition (\cref{ch:system});
+  \item the development of a signal processing pipeline, including artifact removal and
+        temporal and spatial filtering (\cref{ch:processing});
+  \item the training and evaluation of machine learning and statistical classification
+        algorithms, such as \ac{CCA} and \ac{TRCA}, on offline data (\cref{ch:processing,ch:results});
+  \item the integration of \ac{NLP} for real-time predictive text generation, to
+        increase the \ac{ITR} (\cref{ch:language});
+  \item system integration, online experiments and the evaluation of the overall
+        performance of the system: accuracy and \ac{ITR} (\cref{ch:system,ch:results}).
+\end{enumerate}
+
+The system is gaze-based, which means that a user with motor impairments must still be
+able to control their gaze. The system was tested online with only two subjects, and
+offline also on the Benchmark dataset of 35 subjects~\citep{wang2017benchmark}.
 
 \section{Structure of the thesis}
 \label{sec:structure}
 
+The thesis is organised as follows. \Cref{ch:background} reviews the relevant
+literature. \Cref{ch:system} describes the design and implementation of the system. It
+covers the \ac{GUI}, the signal processing pipeline, and the integration of a language
+model. \Cref{ch:processing} presents the methods used to preprocess and classify the
+\ac{EEG} signals, and the offline evaluation of the algorithms. \Cref{ch:language}
+describes the language model and its integration with the speller \ac{GUI}.
+\Cref{ch:results} presents the results of the online experiments, the evaluation of the
+system's performance, and a discussion of the findings. Finally, \cref{ch:conclusions}
+summarises the work, discusses its limitations, and outlines directions for future
+research.
+
 \section{Use of AI tools}
 \label{sec:ai-use}
+
+AI tools were used primarily for researching the existing literature, reviewing and
+summarising relevant papers, structuring, reviewing and writing tests for the implementation 
+of the system. They were also used to fix typos and language in the thesis. The main tool was
+Claude Code (Anthropic) with the Claude Opus 5.5 model. I used the AI tools to complement
+my own work, and all sources of information obtained from AI tools have been properly
+cited and acknowledged. I critically evaluated the outputs of the AI tools to ensure their
+accuracy and relevance to the research objectives.
