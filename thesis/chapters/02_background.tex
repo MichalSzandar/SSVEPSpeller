@@ -8,20 +8,53 @@
 \chapter{Background and literature review}
 \label{ch:background}
 
+In this chapter, I cover the theoretical background and the prior work that my thesis
+builds on. I describe what \ac{EEG} measures and what can disturb it, the main \ac{BCI}
+paradigms and why I chose \ac{SSVEP} for this work, and existing \ac{SSVEP} spellers.
+Then I describe how \ac{SSVEP} responses are detected (with methods such as \ac{CCA},
+\ac{FBCCA} and \ac{TRCA}), how language models are used in \ac{BCI} spellers, and how
+performance is measured (accuracy and \ac{ITR}). Finally, I identify the research gap
+that my thesis addresses.
+
 \section{EEG basics}
 \label{sec:eeg}
+
+\ac{EEG} is a non-invasive method of measuring brain activity~\citep{nunez2006electric}.
+Electrodes placed on the scalp record the difference in potential between each electrode
+and a reference electrode. The recorded potentials are very small, of the order of
+microvolts, so they must be amplified. The \ac{EEG} signal is a mixture of the activity of
+many brain regions, and it is easily contaminated by artifacts such as eye blinks, muscle
+activity~\citep{goncharova2003emg} and power-line noise~\citep{uriguen2015artifact}.
 
 \section{BCI paradigms}
 \label{sec:paradigms}
 
-\section{SSVEP and stimulus design}
-\label{sec:ssvep}
-
-\section{Detection methods}
-\label{sec:detection}
+Of the many \ac{BCI} paradigms, three are most widely used in spellers: P300,
+\ac{SSVEP} and \ac{MI}~\citep{rezeika2018spellers}. The P300 paradigm is based on
+the brain's response to a rare or unexpected stimulus~\citep{farwell1988talking}. The
+\ac{MI} paradigm relies on the user imagining a movement, which changes the \ac{EEG}
+rhythms over the motor cortex~\citep{pfurtscheller2001motor}. The \ac{SSVEP} paradigm is
+based on the brain's response to a visual stimulus that flickers at a constant
+frequency~\citep{vialatte2010ssvep}. I chose the \ac{SSVEP} paradigm for this work
+because it achieves a high \ac{ITR}~\citep{chen2015highspeed,nakanishi2018trca} and needs
+little or no calibration data~\citep{lin2006cca}.
 
 \section{SSVEP spellers}
 \label{sec:spellers}
+
+In general, an \ac{SSVEP} speller consists of a grid of flickering targets, each with its
+own frequency~\citep{rezeika2018spellers}. When the user looks at a target, the \ac{EEG}
+recorded over the visual cortex contains a response at the frequency of that target and
+its harmonics, so the system can detect which target the user is looking
+at~\citep{vialatte2010ssvep}.
+One of the fastest \ac{SSVEP} spellers was presented by \citet{chen2015highspeed}. It had
+40 targets whose frequencies were 0.2\,Hz apart. The authors recorded the \ac{EEG} with a
+laboratory amplifier from nine electrodes over the parietal and occipital areas, and their
+12 subjects reached an average \ac{ITR} of 4.45\,bits/s (about 267\,bits/min) in cued
+spelling.
+
+\section{Detection methods}
+\label{sec:detection}
 
 \section{Language models in BCI}
 \label{sec:lm-bci}
