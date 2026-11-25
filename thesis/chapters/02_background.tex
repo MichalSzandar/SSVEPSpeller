@@ -1,20 +1,16 @@
 % Chapter 2 (thesis task 1).
 % Outline: the theory and prior work the thesis builds on: what EEG measures and what
-% disturbs it, the main BCI paradigms and why SSVEP was chosen, how SSVEP stimuli are
-% generated and detected (CCA, FBCCA, TRCA), the best existing SSVEP spellers, language
-% models in BCI spellers, and how performance is measured (accuracy, ITR). Ends with the
-% research gap.
+% disturbs it, the main BCI paradigms and why SSVEP was chosen, existing SSVEP spellers,
+% how language models are used in SSVEP spellers, and the research gap.
 
 \chapter{Background and literature review}
 \label{ch:background}
 
 In this chapter, I cover the theoretical background and the prior work that my thesis
 builds on. I describe what \ac{EEG} measures and what can disturb it, the main \ac{BCI}
-paradigms and why I chose \ac{SSVEP} for this work, and existing \ac{SSVEP} spellers.
-Then I describe how \ac{SSVEP} responses are detected (with methods such as \ac{CCA},
-\ac{FBCCA} and \ac{TRCA}), how language models are used in \ac{BCI} spellers, and how
-performance is measured (accuracy and \ac{ITR}). Finally, I identify the research gap
-that my thesis addresses.
+paradigms and why I chose \ac{SSVEP} for this work, existing \ac{SSVEP} spellers, and how
+language models are used in them. Finally, I identify the research gap that my thesis
+addresses.
 
 \section{EEG basics}
 \label{sec:eeg}
@@ -25,6 +21,9 @@ and a reference electrode. The recorded potentials are very small, of the order 
 microvolts, so they must be amplified. The \ac{EEG} signal is a mixture of the activity of
 many brain regions, and it is easily contaminated by artifacts such as eye blinks, muscle
 activity~\citep{goncharova2003emg} and power-line noise~\citep{uriguen2015artifact}.
+In addition, the frequencies of my \ac{SSVEP} speller (8--15\,Hz) overlap with the alpha
+rhythm (8--13\,Hz), which is typically present when the eyes are closed and the subject is
+relaxed~\citep{nunez2006electric}.
 
 \section{BCI paradigms}
 \label{sec:paradigms}
@@ -47,20 +46,41 @@ own frequency~\citep{rezeika2018spellers}. When the user looks at a target, the 
 recorded over the visual cortex contains a response at the frequency of that target and
 its harmonics, so the system can detect which target the user is looking
 at~\citep{vialatte2010ssvep}.
+
 One of the fastest \ac{SSVEP} spellers was presented by \citet{chen2015highspeed}. It had
 40 targets whose frequencies were 0.2\,Hz apart. The authors recorded the \ac{EEG} with a
 laboratory amplifier from nine electrodes over the parietal and occipital areas, and their
 12 subjects reached an average \ac{ITR} of 4.45\,bits/s (about 267\,bits/min) in cued
 spelling.
 
-\section{Detection methods}
-\label{sec:detection}
+\citet{nakanishi2018trca} improved on this speller with a new classification method,
+\ac{TRCA}, which raised the average \ac{ITR} in cued spelling to about 325\,bits/min
+(5.4\,bits/s). For more details on \ac{TRCA} and the other classification methods, see
+\cref{ch:processing}.
 
 \section{Language models in BCI}
 \label{sec:lm-bci}
 
-\section{Performance measures}
-\label{sec:measures}
+The simplest way to improve a speller with a language model is to suggest whole words to
+the user. \citet{gembler2019dynamic} used this approach: their speller had eight targets on
+two levels, with three word suggestions from a bigram model on the first level, and it
+reached about 57\,bits/min. Another example is MindChat~\citep{wang2025mindchat}, a speller
+that uses a large language model (GPT-4o) to suggest words and whole sentences. Its
+keyboard has 40 targets, five of which show suggested words and two whole sentences.
+
+Another use of language models is to improve the classification of \ac{SSVEP} responses by
+fusing the output of the classifier with the prediction of the language model.
+\citet{zhang2024improving} fused the output of EEGNet, a convolutional neural network, with
+that of a character-level \ac{LSTM} language model. However, they tested it only offline,
+on the Benchmark dataset~\citep{wang2017benchmark}, where it raised the accuracy by up to
+2.9\,\%.
 
 \section{Research gap}
 \label{sec:gap}
+
+The fastest \ac{SSVEP} spellers are laboratory systems. Spellers that use language models
+use them mainly to suggest words, and to my knowledge only \citet{zhang2024improving} used a
+language model to improve the classification of \ac{SSVEP} responses, and only offline. My
+goal is to use a language model not only to suggest words but also to improve the
+classification of \ac{SSVEP} responses, in a real-time system that works with a
+consumer-grade \ac{EEG} device.
