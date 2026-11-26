@@ -76,7 +76,7 @@ unzip -p PhraseSets.zip phrases2.txt > mackenzie_soukoreff_2003.txt
 ## Quick start without the cap
 
 ```bash
-# Offline comparison on synthetic data (no download needed)
+# Offline comparison on synthetic data (no download needed, ~3 min)
 .venv/bin/python scripts/compare_methods.py --data synthetic
 
 # Speller GUI with a stand-in backend that selects a random target in every trial
@@ -374,3 +374,9 @@ thesis/              LaTeX source of the thesis
 ```
 
 GitHub Actions runs these three checks on every push to `main` and on pull requests.
+
+## License
+
+The code is released under the MIT License, see [LICENSE](LICENSE). The Benchmark
+dataset and the phrase set are not part of this repository and come under their own
+terms.
