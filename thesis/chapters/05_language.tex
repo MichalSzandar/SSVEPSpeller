@@ -18,7 +18,7 @@ keystrokes required to type a word, and by correcting misclassifications made by
 Despite the fact, that \ac{ITR} and accuracy results from the benchmark dataset were 
 very promising, and classification methods from TRCA family were able to achieve over 
 90\% accuracy over a 0.5 s window, the data collected from my offline experiments showed that 
-those numbers are unreachable on consumer-grade EEG devices. The main reason for this 
+those numbers are unreachable on consumer-grade EEG devices on such a small time window. The main reason for this 
 is the low \ac{SNR} of the EEG signal. This leads to a high number of 
 misclassifications, which in turn leads to a low \ac{ITR}. 
 
@@ -35,7 +35,7 @@ The language model has two roles here:
 \section{Word completion}
 \label{sec:completion}
 
-The base for word completion is a unigram model~\citep{garayvitoria2006survey}. A
+The base for word completion is a unigram model. A
 unigram model gives every word a probability proportional to its frequency in a large
 collection of text~\citep{jurafsky2009slp}. It serves as a baseline because it does not
 take the context into account: it cannot predict a word from the words typed before it,
@@ -138,7 +138,7 @@ and the target with the highest posterior probability is selected.
 The problem is that the classifier does not output probabilities over the targets,
 but a score for each target (\cref{ch:processing}), such as a correlation coefficient.
 To convert the scores into probabilities, I use a softmax function with a temperature
-parameter~\citep{hinton2015distilling}:
+parameter
 \begin{equation}
     p_k = P(k \mid \mathbf{X}) = \frac{\exp(s_k / \theta)}{\sum_{j=1}^{N_t} \exp(s_j / \theta)},
     \label{eq:softmax}

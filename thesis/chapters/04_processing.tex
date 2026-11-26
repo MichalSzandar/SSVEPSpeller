@@ -25,19 +25,17 @@ cue, during which the subject shifts their gaze to the target, 5\,s of flicker a
 blank screen. The \ac{EEG} was recorded with 64 wet electrodes at 1000\,Hz, and the data were
 downsampled to 250\,Hz. The 40 targets are arranged in a 5-by-8 grid and flicker at
 frequencies from 8 to 15.8\,Hz in steps of 0.2\,Hz, with phases from 0 to $1.5\pi$ in steps
-of $0.5\pi$~\citep{chen2015highspeed}. The dataset is publicly available at
+of $0.5\pi$. The dataset is publicly available at
 \url{https://bci.med.tsinghua.edu.cn/}. I used the nine parieto-occipital channels Pz, PO5,
 PO3, POz, PO4, PO6, O1, Oz and O2, as \citet{nakanishi2018trca} did, and only the six targets
 at the speller frequencies (\cref{tab:targets}), which lie on the Benchmark grid: 36 trials
 per subject, six per target. The analysis window starts 0.14\,s after the flicker onset, the
-visual latency used by \citet{chen2015highspeed} and \citet{nakanishi2018trca}.
+visual latency used by \citet{wang2017benchmark} and \citet{nakanishi2018trca}.
 
-% TODO: compare results/benchmark_40.csv with the numbers in Nakanishi et al. 2018 (their
-% data lengths and ITR definition) and say in sec:benchmark how close they are.
 To check my implementations of \ac{CCA}, \ac{FBCCA} and the \ac{TRCA} family against the
 literature, I also ran them on all 40 targets of the Benchmark dataset, with windows from
-0.25 to 1\,s, where their results can be compared with those reported by
-\citet{nakanishi2018trca} (\cref{sec:benchmark}).
+0.25 to 1\,s. The ranking of the methods and the best window lengths agreed with the results 
+of \citet{nakanishi2018trca} with TRCA methods getting the best performance (\cref{sec:benchmark}).
 
 I also recorded my own data with the cap described in \cref{sec:hardware}, in two sessions
 on different days with myself as the subject. Each session followed the calibration protocol
@@ -46,10 +44,8 @@ Each trial consists of a 2\,s cue and 5\,s of flicker. It is cut into a 6\,s epo
 same layout as a Benchmark epoch: 0.5\,s before the flicker onset, the 5\,s of flicker and
 0.5\,s after it, so the same processing runs on both datasets. The analysis window starts
 0.7\,s after the onset marker instead of 0.14\,s, because in the first session the timestamps
-of the cap ran about 0.5\,s ahead of the markers (\cref{sec:acquisition}). In that session,
-the accuracy rose with the latency up to about 0.7\,s; in the second session, it depended
-little on the latency between 0.14 and 1\,s (\cref{sec:own-recordings}), so one latency of
-0.7\,s serves both.
+of the cap ran about 0.5\,s ahead of the markers (\cref{sec:acquisition}). In my online sessions 
+I found out that the best latency was in fact 0.14\,s using a window sweep on calibration data.
 
 \section{Preprocessing}
 \label{sec:preprocessing}
@@ -62,8 +58,8 @@ activity that is not related to the stimulus: eye blinks and eye movements, musc
 of the face and neck, and the ongoing rhythms of the brain. Filtering removes only the part
 of it that lies outside the band of the \ac{SSVEP}: power-line interference at 50\,Hz, slow
 drifts of the electrode potentials, most of the energy of blinks and eye movements, which is
-concentrated at the lowest frequencies, and noise above the upper edge of the band-pass.
-\missing{citation for the low-frequency spectrum of blinks and eye movements}
+concentrated at the lowest frequencies~\citep{gasser1985eog}, and noise
+above the upper edge of the band-pass.
 Muscle activity has a broad spectrum, from a few hertz to over 200\,Hz, and is strongest
 between about 20 and 80\,Hz~\citep{goncharova2003emg}, so most of it stays in the filtered
 signal. The alpha rhythm (8--13\,Hz) stays as well, because it overlaps the four lowest
@@ -288,7 +284,7 @@ of 10\,s (2500 samples), so the frequencies of the periodogram lie on a 0.1\,Hz 
 padding they would be $f_s / N_s$ apart, for example 1\,Hz for a 1\,s window, and would miss
 most target frequencies. With padding, every target frequency and its harmonics, which are all
 multiples of 0.1\,Hz, fall on the grid.
-I chose to use the Hann-window periodogram instead of the multitaper method~\citep{thomson1982multitaper}, because it is simpler and faster to compute,
+I chose the Hann-window periodogram because it is simple and fast to compute,
 and it provides sufficient frequency resolution for the target frequencies and their harmonics.
 
 The logarithms of the \ac{PSD} at the target frequencies and their harmonics are the input
@@ -307,7 +303,7 @@ the means of the targets and this covariance matrix. Each fold of the cross-vali
 (\cref{sec:evaluation}) has at most 54 training trials for my recordings and 30 for Benchmark,
 fewer than the number of features. With fewer trials than features, the sample covariance
 matrix $\hat{\bm{\Sigma}}$ is singular and cannot be inverted. I therefore use shrinkage
-\ac{LDA}~\citep{blankertz2011erp}, which replaces $\hat{\bm{\Sigma}}$ with
+\ac{LDA}, which replaces $\hat{\bm{\Sigma}}$ with
 \begin{equation}
     \tilde{\bm{\Sigma}} = (1 - \gamma)\,\hat{\bm{\Sigma}} + \gamma \nu \mathbf{I},
     \qquad
@@ -396,7 +392,7 @@ classifier is fitted on the calibration data.
 To determine the best window length for each method, I repeated the whole leave-one-block-out
 evaluation for a range of window lengths, cutting windows of different lengths out of the same
 trials. Every window starts at the stimulus onset plus the visual latency, 0.14\,s for the
-Benchmark dataset and 0.7\,s for my recordings (\cref{sec:datasets}). For the Benchmark
+Benchmark dataset and second recording, and 0.7\,s for my first recording (\cref{sec:datasets}). For the Benchmark
 dataset, the window lengths are 0.25 to 2\,s in steps of 0.25\,s. For my recordings, they are
 0.5 to 3\,s in steps of 0.5\,s, and 4\,s: a window that starts 0.7\,s after the onset must end
 before the flicker stops 5\,s after it, so it can be at most 4.3\,s long. A longer window

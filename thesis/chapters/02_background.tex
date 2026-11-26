@@ -20,7 +20,7 @@ Electrodes placed on the scalp record the difference in potential between each e
 and a reference electrode. The recorded potentials are very small, of the order of
 microvolts, so they must be amplified. The \ac{EEG} signal is a mixture of the activity of
 many brain regions, and it is easily contaminated by artifacts such as eye blinks, muscle
-activity~\citep{goncharova2003emg} and power-line noise~\citep{uriguen2015artifact}.
+activity~\citep{goncharova2003emg} and power-line noise~\citep{wang2017benchmark}.
 In addition, the frequencies of my \ac{SSVEP} speller (8--15\,Hz) overlap with the alpha
 rhythm (8--13\,Hz), which is typically present when the eyes are closed and the subject is
 relaxed~\citep{nunez2006electric}.
@@ -29,12 +29,12 @@ relaxed~\citep{nunez2006electric}.
 \label{sec:paradigms}
 
 Of the many \ac{BCI} paradigms, three are most widely used in spellers: P300,
-\ac{SSVEP} and \ac{MI}~\citep{rezeika2018spellers}. The P300 paradigm is based on
+\ac{SSVEP} and \ac{MI}. The P300 paradigm is based on
 the brain's response to a rare or unexpected stimulus~\citep{farwell1988talking}. The
 \ac{MI} paradigm relies on the user imagining a movement, which changes the \ac{EEG}
 rhythms over the motor cortex~\citep{pfurtscheller2001motor}. The \ac{SSVEP} paradigm is
 based on the brain's response to a visual stimulus that flickers at a constant
-frequency~\citep{vialatte2010ssvep}. I chose the \ac{SSVEP} paradigm for this work
+frequency~\citep{chen2015fbcca}. I chose the \ac{SSVEP} paradigm for this work
 because it achieves a high \ac{ITR}~\citep{chen2015highspeed,nakanishi2018trca} and needs
 little or no calibration data~\citep{lin2006cca}.
 
@@ -42,10 +42,10 @@ little or no calibration data~\citep{lin2006cca}.
 \label{sec:spellers}
 
 In general, an \ac{SSVEP} speller consists of a grid of flickering targets, each with its
-own frequency~\citep{rezeika2018spellers}. When the user looks at a target, the \ac{EEG}
+own frequency~\citep{nakanishi2018trca}. When the user looks at a target, the \ac{EEG}
 recorded over the visual cortex contains a response at the frequency of that target and
 its harmonics, so the system can detect which target the user is looking
-at~\citep{vialatte2010ssvep}.
+at~\citep{chen2015fbcca}.
 
 One of the fastest \ac{SSVEP} spellers was presented by \citet{chen2015highspeed}. It had
 40 targets whose frequencies were 0.2\,Hz apart. The authors recorded the \ac{EEG} with a
@@ -70,16 +70,16 @@ keyboard has 40 targets, five of which show suggested words and two whole senten
 
 Another use of language models is to improve the classification of \ac{SSVEP} responses by
 fusing the output of the classifier with the prediction of the language model.
-\citet{zhang2024improving} fused the output of EEGNet, a convolutional neural network, with
+\citet{zhang2025improving} fused the output of EEGNet, a convolutional neural network, with
 that of a character-level \ac{LSTM} language model. However, they tested it only offline,
 on the Benchmark dataset~\citep{wang2017benchmark}, where it raised the accuracy by up to
-2.9\,\%.
+1.19\,\%.
 
 \section{Research gap}
 \label{sec:gap}
 
 The fastest \ac{SSVEP} spellers are laboratory systems. Spellers that use language models
-use them mainly to suggest words, and to my knowledge only \citet{zhang2024improving} used a
+use them mainly to suggest words, and to my knowledge only \citet{zhang2025improving} used a
 language model to improve the classification of \ac{SSVEP} responses, and only offline. My
 goal is to use a language model not only to suggest words but also to improve the
 classification of \ac{SSVEP} responses, in a real-time system that works with a

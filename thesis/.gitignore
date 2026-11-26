@@ -13,3 +13,4 @@
 *.toc
 # The compiled thesis: rebuild it from the sources
 /thesis.pdf
+sources/

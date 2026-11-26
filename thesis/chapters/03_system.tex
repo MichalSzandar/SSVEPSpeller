@@ -175,7 +175,7 @@ recorder, the simulated \ac{EEG} stream and the offline comparison of methods.
 \label{sec:stimulus}
 
 Each target is a square whose luminance follows a sampled
-sinusoid~\citep{manyakov2013sampled,chen2015highspeed}: on the $i$-th screen refresh after the stimulus
+sinusoid~\citep{manyakov2013sampled,wang2017benchmark}: on the $i$-th screen refresh after the stimulus
 onset, target $k$ is drawn with the luminance
 \begin{equation}
   L_k(i) = \frac{1}{2}\left(1 + \sin\left(2\pi f_k \frac{i}{R} + \phi_k\right)\right),
@@ -300,8 +300,7 @@ The system uses a two-level speller layout with six targets (\cref{fig:layout}).
     transformer suggestions. The phrase to copy is at the top of the text box, the
     typed text below it, and the red frame cues the next target. Each square of the
     first level previews its group: letters on a small ring, where each will be at the
-    second level, and the suggestions as lines. The labels are hidden during the
-    flicker. Screenshots of the \acs*{GUI}, cropped to the ring.}
+    second level, and the suggestions as lines. Screenshots of the \acs*{GUI}, cropped to the ring.}
   \label{fig:layout}
 \end{figure}
 
@@ -355,13 +354,11 @@ frequencies blur into each other. If neighbours on the screen were also neighbou
 frequency, both effects would favour the same wrong target.
 
 Before each flicker, during the gaze shift, every square shows its label: at the second
-level a letter, a word or a symbol, and at the first level a preview of its group. The
-labels disappear while the squares flicker, so the stimulus looks exactly as in
-calibration (\cref{sec:calibration}), where the squares are plain, and the templates
-learned there apply online. A first-level preview shows the six items of a group on a
+level a letter, a word or a symbol, and at the first level a preview of its group. 
+A first-level preview shows the six items of a group on a
 small ring, each where its square will be at the second level, so the user can plan
 both selections at once, as in the Hex-o-Spell
-typewriter~\citep{blankertz2006hexospell,williamson2009designing}. The suggestion group
+typewriter~\citep{williamson2009designing}. The suggestion group
 is the exception: its words would be too small on such a ring, so its preview lists
 them one per line.
 
@@ -394,7 +391,7 @@ event to the recorder; no backend runs during calibration (\cref{sec:architectur
 \end{figure}
 
 The 5\,s flicker is long enough to cover the longest analysed window of 4\,s plus the
-latency of 0.7\,s used in the offline analysis of my recordings (\cref{sec:datasets}),
+latency of 0.14\,s used in the offline analysis of my recordings (\cref{sec:datasets}),
 and it is the same as in the
 Benchmark dataset~\citep{wang2017benchmark}, so the same epoching and window sweep run
 on both datasets.
@@ -461,7 +458,7 @@ markers and their fields.
         \draw (\t,-0.1) -- (\t,-0.2) node[below left, font=\scriptsize] {\t};
       \node[font=\scriptsize, anchor=west] at (4.3,-0.35) {s};
     \end{tikzpicture}
-    \caption{Online trial: 0.5\,s gaze shift with the labels shown, 2\,s of flicker,
+    \caption{Online trial: 0.5\,s gaze shift, 2\,s of flicker,
       the wait for the answer of the backend (dashed, as its length varies; at most
       3\,s), and 0.5\,s of feedback. The cue marker is sent only when the next target is cued
       in copy-spelling.}
@@ -527,7 +524,7 @@ The online speller uses the synchronous paradigm (\cref{sec:paradigms}): the sys
 not the user, decides when a selection is made, and every trial ends with one
 selection. A trial (\cref{fig:trial-online}) starts with a 0.5\,s gaze shift, during
 which the six squares show their labels and the user finds the next target, followed
-by 2\,s of flicker without the labels. After the flicker, the \ac{GUI} waits for the
+by 2\,s of flicker with labels still displayed. After the flicker, the \ac{GUI} waits for the
 answer of the backend. When it comes, a green frame marks the selected square for
 0.5\,s while the typed text is updated, and then the labels of the next trial appear.
 If no answer comes within 3\,s, the \ac{GUI} pauses, so a stopped backend cannot leave
@@ -576,8 +573,8 @@ filters see the same edges in training as online, and a new latency or window ne
 new calibration. With the fusion option, it also fits the temperature of the fusion on
 cross-validated scores of the calibration (\cref{sec:fusion}).
 
-The speller has two modes. In copy-spelling, the backend is given a list of phrases,
-taken from the phrase set of \citet{mackenzie2003phrase} (\cref{app:phrases}), and the \ac{GUI} shows the current phrase above the typed text.
+The speller has two modes. In copy-spelling, the backend is given a list of phrases 
+(\cref{app:phrases}), and the \ac{GUI} shows the current phrase above the typed text.
 For every trial, the speller computes the next target on the shortest correct way to
 the phrase. After a mistake, this way starts with the correction: backspace after a
 wrong character or word, back after a wrong group. A suggestion comes first whenever
@@ -627,7 +624,6 @@ latencies and classifiers can be compared offline on the same trials
 (\cref{sec:online-results}).
 
 The package and the scripts are covered by 624 automated tests written with pytest.
-% Recount at v1.0: .venv/bin/python -m pytest --collect-only -q | tail -1
 Three kinds of tests carry most of the weight. The first use synthetic signals with a
 known answer: a sinusoid of known frequency and unknown phase must give a canonical
 correlation close to one with the reference signals of its own frequency and a low one
@@ -687,12 +683,12 @@ requirement, how it was verified and with what result.
     FR4  & recordings read by the offline analysis & met (\cref{sec:own-recordings}) \\
     FR5  & online session with the cap & met: classification in a median of 11\,ms (\cref{sec:online-results}) \\
     FR6  & unit tests of the speller; simulated copying of 500 phrases & met: every phrase spelled \\
-    FR7  & start-up option; test with the simulated stream; online session & met: 9 of 9 words accepted in the test, 11 words accepted online \\
+    FR7  & start-up option; test with the simulated stream; online session & met: 9 of 9 words accepted in the test, 35 words accepted online \\
     FR8  & copy-spelling with the cap & met: accuracy from the logs (\cref{sec:online-results}) \\
     FR9  & replay of the online session & met: logged decisions reproduced exactly \\
     \midrule
     NFR1 & flip logs of every session & met in the calibrations (no dropped frames); one dropped frame in 98 online trials (\cref{sec:timing-results}) \\
-    NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms (\cref{sec:online-results}); over the phrase set, suggestions at most 141\,ms (\cref{sec:lm-evaluation}) \\
+    NFR2 & times in the decision logs; suggestions over the whole phrase set & met: online, classification at most 22\,ms and suggestions at most 74\,ms (\cref{sec:online-results}); over the phrase set, suggestions at most 141\,ms \\
     NFR3 & one package for both paths; replay against the offline comparison & met: 239 of 240 \acs*{CCA} and \acs*{FBCCA} decisions identical \\
     NFR4 & simulated stream, replay, tests of the whole system & met \\
     NFR5 & all measurements on the laptop of \cref{sec:hardware} & met \\
