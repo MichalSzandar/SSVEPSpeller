@@ -78,7 +78,7 @@ SESSION_STYLES = [
     {"color": "#8f8d87", "marker": "s", "linestyle": "--"},
 ]
 BENCHMARK_STYLE = {"color": COLORS[0], "marker": "D", "linestyle": "-"}
-OWN_LATENCY = 0.7  # s, the latency of the own recordings in Ch. 4 and 6
+OWN_LATENCY = 0.14  # s, the latency of the own recordings in Ch. 4 and 6
 COMPARED_METHODS = ["CCA", "FBCCA-norm", "eTRCA", "FB-eTRCA"]  # own_vs_benchmark
 
 

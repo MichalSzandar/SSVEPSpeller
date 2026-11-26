@@ -31,5 +31,45 @@
 % - time per selection, onset to onset, used for the online ITR: 4.2 s =
 %   0.5 s gaze shift + 2 s flicker + 1.2 s wait + 0.5 s feedback
 
+\subsection{Spelled sentences}
+\label{sec:spelled-sentences}
+
+\Cref{tab:spelled-sentences} lists every sentence I spelled online, in the order I
+spelled them. The two phrases of 16 November come from the phrase set
+of~\citet{mackenzie2003phrase}; on that day I stopped after two of the three planned
+phrases. I chose the three phrases of 25 November myself and copied them twice, first
+with distilgpt2 suggestions and then without suggestions, so the two conditions can be
+compared phrase by phrase. After the first of these runs I also spelled a sentence of my
+own in free spelling. Free spelling has no ground truth, so it has no accuracy, and the
+sentence is given as I left it, with one wrong letter.
+
+\begin{table}[tb]
+  \centering
+  \caption{Sentences I spelled online. Selections: all selections the phrase took,
+    including errors and their corrections. Accuracy: the share of cued selections
+    that the classifier decided correctly. Time: from the first flicker onset of the
+    phrase to the end of its last selection.}
+  \label{tab:spelled-sentences}
+  \small
+  \begin{tabularx}{\textwidth}{@{}ll>{\raggedright\arraybackslash}Xrrr@{}}
+    \toprule
+    Date & Suggestions & Spelled text & Selections & Accuracy & Time (s) \\
+    \midrule
+    16 Nov & distilgpt2 & NEVER TOO RICH AND NEVER TOO THIN        & 52  & 92\,\% & 219 \\
+           & distilgpt2 & THE SUM OF THE PARTS                     & 46  & 83\,\% & 194 \\
+    \midrule
+    25 Nov & distilgpt2 & WISH YOU WERE HERE                       & 26  & 88\,\% & 104 \\
+           & distilgpt2 & THERE IS NO DARK SIDE OF THE MOON REALLY & 38  & 97\,\% & 152 \\
+           & distilgpt2 & IN FACT IT IS ALL BLACK                  & 34  & 91\,\% & 136 \\
+           & distilgpt2 & \textit{Free spelling:} JULITA IS THE PRIETTIEST GIRL IN THE WORLD
+                                                                 & 106 & --     & 424 \\
+    \addlinespace
+           & none       & WISH YOU WERE HERE                       & 42  & 95\,\% & 168 \\
+           & none       & THERE IS NO DARK SIDE OF THE MOON REALLY & 108 & 90\,\% & 432 \\
+           & none       & IN FACT IT IS ALL BLACK                  & 62  & 92\,\% & 248 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
 \section{Language model results}
 \label{sec:lm-results}
