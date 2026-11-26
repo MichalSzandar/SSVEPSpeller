@@ -24,10 +24,9 @@ cd "$(dirname "$0")/.."
 PY=.venv/bin/python
 OUT=results
 # The own dataset (thesis Sec. 4.1): two 10-block calibrations, both of the author
-SESSION1=data/recordings/pilot_20261110_172435.npz  # Nov 10, EEG timestamps ~0.5 s early
-SESSION2=data/recordings/S02_20261116_195733.npz    # Nov 16
-OWN_LATENCY=0.7          # s, used with the cap (Sec. 4.1)
-SESSION2_ALIGNED=0.2     # s, Nov 16 latency that matches Nov 10 at 0.7 s minus the 0.5 s lead
+SESSION1=data/recordings/S02_20261116_195733.npz    # Nov 16
+SESSION2=data/recordings/S01_20261125_184924.npz    # Nov 25
+OWN_LATENCY=0.14         # s, Benchmark's value; neither session has the Nov 10 timestamp lead
 SUBJECTS=$(seq -s ' ' 1 35)
 
 needed() {  # needed <file>: true if the step that makes <file> must run
@@ -80,11 +79,7 @@ step_own() {
   fi
   if needed $OUT/cross_session.csv; then
     $PY scripts/cross_session.py --recordings $SESSION1 $SESSION2 --windows 1 2 3 \
-      --name cross_session
-  fi
-  if needed $OUT/cross_session_aligned.csv; then
-    $PY scripts/cross_session.py --recordings $SESSION1 $SESSION2 --windows 1 2 3 \
-      --latencies $OWN_LATENCY $SESSION2_ALIGNED --name cross_session_aligned
+      --latencies $OWN_LATENCY $OWN_LATENCY --name cross_session
   fi
   if needed $OUT/ratios_own_trials.csv; then
     $PY scripts/artifact_ratios.py --data recording --recordings $SESSION1 $SESSION2 \
@@ -101,8 +96,8 @@ step_online() {
 
 step_timing() {
   # The own sessions' flip logs (calibration and online) and every flicker test
-  $PY scripts/analyse_timing.py data/recordings/pilot_20261110_*flips.npz \
-    data/recordings/S02_20261116_*flips.npz results/timing/flicker_*.npz --name timing
+  $PY scripts/analyse_timing.py data/recordings/S02_20261116_*flips.npz \
+    data/recordings/S01_20261125_*flips.npz results/timing/flicker_*.npz --name timing
 }
 
 step_figures() {

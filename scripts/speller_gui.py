@@ -12,8 +12,8 @@ The messages in both directions are described in ssvep/protocol.py.
 One trial (one selection):
     gaze      --gaze s (config.GAZE_SHIFT), targets at rest with their labels; a red
               frame around the state's target if the state asks for a cue
-    flicker   --stim s (config.ONLINE_STIM_DURATION), labels hidden, so the stimulus
-              looks exactly like calibration; stim_on marker at the first flip
+    flicker   --stim s (config.ONLINE_STIM_DURATION), labels still shown; stim_on
+              marker at the first flip
     wait      targets at rest until the backend answers (RESPONSE_TIMEOUT s at most,
               then the GUI pauses)
     feedback  --feedback s (config.FEEDBACK_DURATION), green frame around the selected
@@ -47,6 +47,7 @@ import pandas as pd
 import pyglet
 import pylsl
 from pyglet import shapes
+from pyglet.math import Mat4, Vec3
 from pyglet.window import key
 
 from calibration import (
@@ -77,6 +78,7 @@ BOX_ASPECT = 1.4  # width / height of the text box in the middle of the ring
 LABEL_FILL = 0.8  # fraction of a square's side a label may cover
 MINI_FILL = 1.0  # cell size in a nested label's ring, as in stimulus.ring_layout
 MINI_MARGIN = 0.08
+OUTLINE = 3  # px, black outline that keeps the white labels readable on a white square
 DEMO_BLOCK = 12  # trials between the demo's pauses
 
 
@@ -122,9 +124,9 @@ class SpellerScene(FlickerScene):
     words in it is drawn as lines instead, one word per line in clockwise screen order
     and the single symbols together on the last line, all in one font size: in a mini
     ring a long word gets an unreadably small font, and neighbouring words run
-    together. Labels are hidden while ``show_labels`` is false (during the flicker).
-    The middle of the ring shows the phrase to copy, the typed text with a cursor, and
-    a message.
+    together. Labels are white with a black outline, so they stay readable during the
+    flicker. The middle of the ring shows the phrase to copy, the typed text with a
+    cursor, and a message.
     """
 
     def __init__(
@@ -136,14 +138,17 @@ class SpellerScene(FlickerScene):
         refresh_rate: float,
     ):
         super().__init__(window, freqs, phases, slots, refresh_rate, freq_labels=False)
-        self.show_labels = True
+        self.window = window
         self.label_batch = pyglet.graphics.Batch()  # drawn over the squares
-        self.target_labels = []
-        # Black text on squares that are light at rest, white on dark ones
-        rest = stimulus.luminance(freqs, phases, 0, refresh_rate)[:, 0]
-        self.label_colors = [
-            (0, 0, 0, 255) if level >= 128 else (255, 255, 255, 255)
-            for level in stimulus.gray_levels(rest)
+        self.outline_batch = pyglet.graphics.Batch()  # black copies, under the labels
+        self.target_labels = []  # outline copies included
+        self.label_colors = [(255, 255, 255, 255)] * len(freqs)
+        # The black copies are drawn shifted in these 8 directions
+        self.outline_shifts = [
+            Mat4.from_translation(Vec3(dx, dy, 0))
+            for dx in (-OUTLINE, 0, OUTLINE)
+            for dy in (-OUTLINE, 0, OUTLINE)
+            if dx or dy
         ]
 
         outer = self.size + 2 * CUE_GAP
@@ -214,6 +219,7 @@ class SpellerScene(FlickerScene):
         if scale < 1.0:
             label.font_size *= scale
         self.target_labels.append(label)
+        self._add_outline(label)
 
     def _add_lines(self, lines: list[str], x: float, y: float, max_size: float, color):
         """Bold lines centred on (x, y), one font size for all, shrunk so that the
@@ -243,7 +249,24 @@ class SpellerScene(FlickerScene):
         for i, label in enumerate(labels):
             label.font_size *= scale
             label.y = top - (i + 0.5) * line_height
+            self._add_outline(label)
         self.target_labels.extend(labels)
+
+    def _add_outline(self, label: pyglet.text.Label):
+        """A black copy of ``label`` for its outline (see draw)."""
+        copy = pyglet.text.Label(
+            label.text,
+            x=label.x,
+            y=label.y,
+            anchor_x="center",
+            anchor_y="center",
+            font_size=label.font_size,
+            font_name=FONT,
+            weight="bold",
+            color=(0, 0, 0, 255),
+            batch=self.outline_batch,
+        )
+        self.target_labels.append(copy)
 
     def set_labels(self, labels: list):
         """Replace the target labels (protocol format, one entry per target)."""
@@ -296,8 +319,12 @@ class SpellerScene(FlickerScene):
 
     def draw(self):
         self.batch.draw()
-        if self.show_labels:
-            self.label_batch.draw()
+        view = self.window.view
+        for shift in self.outline_shifts:
+            self.window.view = view @ shift
+            self.outline_batch.draw()
+        self.window.view = view
+        self.label_batch.draw()
 
 
 class LslLink:
@@ -477,7 +504,6 @@ class Session:
         if self.window.has_exit:
             return None
 
-        self.scene.show_labels = False
         stim = run_frames(
             self.window,
             self.scene,
@@ -485,7 +511,6 @@ class Session:
             True,
             lambda t: self.link.send(t, "stim_on", **info),
         )
-        self.scene.show_labels = True
         if len(stim) == 0:
             return None
         off = show_frame(self.window, self.scene, 0)
